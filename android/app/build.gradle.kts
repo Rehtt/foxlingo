@@ -60,11 +60,24 @@ android {
                 "proguard-rules.pro",
             )
         }
+        create("unsignedRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            // Flutter copies custom build types into plugin modules. If those modules are
+            // minified independently, their GeneratedPluginRegistrant entry points can be
+            // removed before the app is packaged.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = null
+        }
     }
 }
 
 gradle.taskGraph.whenReady {
-    val needsReleaseSigning = allTasks.any { it.name.contains("Release", ignoreCase = true) }
+    val needsReleaseSigning = allTasks.any {
+        it.name.endsWith("Release", ignoreCase = true) &&
+            !it.name.endsWith("UnsignedRelease", ignoreCase = true)
+    }
     if (needsReleaseSigning) {
         val missingSigningValues = mutableListOf<String>()
         if (releaseStoreFile.isNullOrBlank()) missingSigningValues.add("storeFile")

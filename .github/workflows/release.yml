@@ -1,0 +1,171 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Validate release tag
+        id: version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag must match vMAJOR.MINOR.PATCH, got: $TAG_NAME" >&2
+            exit 1
+          fi
+
+          version="${TAG_NAME#v}"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Decode Android signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$ANDROID_KEYSTORE_BASE64" ]] || {
+            echo "ANDROID_KEYSTORE_BASE64 is not configured" >&2
+            exit 1
+          }
+          [[ -n "$ANDROID_KEYSTORE_PASSWORD" ]] || {
+            echo "ANDROID_KEYSTORE_PASSWORD is not configured" >&2
+            exit 1
+          }
+          [[ -n "$ANDROID_KEY_ALIAS" ]] || {
+            echo "ANDROID_KEY_ALIAS is not configured" >&2
+            exit 1
+          }
+          [[ -n "$ANDROID_KEY_PASSWORD" ]] || {
+            echo "ANDROID_KEY_PASSWORD is not configured" >&2
+            exit 1
+          }
+
+          keystore_path="$RUNNER_TEMP/foxlingo-upload-keystore.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          test -s "$keystore_path"
+          chmod 600 "$keystore_path"
+          echo "ANDROID_STORE_FILE=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Build signed APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --release --split-per-abi \
+            --build-name "$RELEASE_VERSION" \
+            --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Collect signed APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_dir="build/app/outputs/flutter-apk"
+          artifact_dir="$RUNNER_TEMP/foxlingo-apks"
+          mkdir -p "$artifact_dir"
+
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            source="$apk_dir/app-${abi}-release.apk"
+            destination="$artifact_dir/foxlingo-${RELEASE_VERSION}-${abi}.apk"
+            test -f "$source"
+            cp "$source" "$destination"
+          done
+
+      - name: Build unsigned APKs
+        working-directory: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon \
+            -Psplit-per-abi=true \
+            -Ptarget-platform=android-arm,android-arm64,android-x64 \
+            app:assembleUnsignedRelease
+
+      - name: Collect unsigned APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_dir="build/app/outputs/flutter-apk"
+          artifact_dir="$RUNNER_TEMP/foxlingo-apks"
+
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            source="$apk_dir/app-${abi}-release.apk"
+            destination="$artifact_dir/foxlingo-${RELEASE_VERSION}-${abi}-unsigned.apk"
+            test -f "$source"
+            cp "$source" "$destination"
+          done
+
+      - name: Verify APK signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$apksigner"
+
+          artifact_dir="$RUNNER_TEMP/foxlingo-apks"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            signed="$artifact_dir/foxlingo-${RELEASE_VERSION}-${abi}.apk"
+            unsigned="$artifact_dir/foxlingo-${RELEASE_VERSION}-${abi}-unsigned.apk"
+            "$apksigner" verify --verbose "$signed"
+            if "$apksigner" verify "$unsigned" >/dev/null 2>&1; then
+              echo "Unsigned APK is signed: $unsigned" >&2
+              exit 1
+            fi
+          done
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --title "FoxLingo $RELEASE_VERSION"
+          else
+            gh release create "$TAG_NAME" \
+              --title "FoxLingo $RELEASE_VERSION" \
+              --generate-notes
+          fi
+
+          gh release upload "$TAG_NAME" \
+            "$RUNNER_TEMP/foxlingo-apks"/*.apk \
+            --clobber

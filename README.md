@@ -109,6 +109,26 @@ flutter build appbundle --release
 
 `android/key.properties` 已被 Git 忽略；请勿提交真实 API Key、签名密码或密钥库文件。
 
+### GitHub Tag 自动发布
+
+推送符合 `vMAJOR.MINOR.PATCH` 的 Tag（例如 `v0.2.0`）会触发 GitHub Actions 发布。Tag 中的版本号会写入 APK 的 `versionName`，该次 Actions 运行编号会作为 `versionCode`。发布 Workflow 使用 Flutter 3.44.0 和 Java 17。
+
+仓库需要配置以下 GitHub Actions Secrets：
+
+| Secret | 用途 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Android `.jks` / `.keystore` 文件的 Base64 内容 |
+| `ANDROID_KEYSTORE_PASSWORD` | 密钥库密码 |
+| `ANDROID_KEY_ALIAS` | 签名别名 |
+| `ANDROID_KEY_PASSWORD` | 签名密码 |
+
+每次发布会创建或更新标题为 `FoxLingo <版本号>` 的 GitHub Release，并上传以下 6 个 APK：
+
+- 签名版：`foxlingo-<版本号>-arm64-v8a.apk`、`foxlingo-<版本号>-armeabi-v7a.apk`、`foxlingo-<版本号>-x86_64.apk`
+- 无签名版：对应文件名追加 `-unsigned`，例如 `foxlingo-<版本号>-arm64-v8a-unsigned.apk`
+
+签名版适合直接安装或分发；无签名版适合需要自行签名的下游构建流程。`unsignedRelease` 变体继承 Release 的编译、资源及 ProGuard 配置，但关闭该变体的代码 / 资源压缩以兼容 Flutter 插件，并且不会读取或要求发布签名。
+
 ## 项目结构
 
 ```text
