@@ -7,6 +7,8 @@ import 'platform/translation_bridge.dart';
 import 'utils/app_settings.dart';
 import 'utils/translation_settings.dart';
 import 'widgets/translation_overlay_host.dart';
+import 'widgets/app_update_host.dart';
+import 'services/app_update_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,8 +27,10 @@ class FoxLingoApp extends StatefulWidget {
     required this.settings,
     required this.translationSettings,
     this.controller,
+    this.updateService,
   });
 
+  final AppUpdateService? updateService;
   final AppSettings settings;
   final TranslationSettings translationSettings;
   final ScreenTranslationController? controller;
@@ -36,6 +40,8 @@ class FoxLingoApp extends StatefulWidget {
 }
 
 class _FoxLingoAppState extends State<FoxLingoApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final _updates = widget.updateService ?? AppUpdateService();
   late final ScreenTranslationController _controller =
       widget.controller ??
       ScreenTranslationController(settings: widget.translationSettings);
@@ -46,6 +52,7 @@ class _FoxLingoAppState extends State<FoxLingoApp> {
     if (_ownsController) {
       _controller.dispose();
     }
+    if (widget.updateService == null) _updates.dispose();
     super.dispose();
   }
 
@@ -65,6 +72,12 @@ class _FoxLingoAppState extends State<FoxLingoApp> {
           builder: (context, _) {
             return MaterialApp(
               title: 'FoxLingo',
+              navigatorKey: _navigatorKey,
+              builder: (context, child) => AppUpdateHost(
+                service: _updates,
+                navigatorKey: _navigatorKey,
+                child: child!,
+              ),
               theme: ThemeData(
                 colorScheme: ColorScheme.fromSeed(
                   seedColor: _seedColor,

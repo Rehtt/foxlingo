@@ -247,4 +247,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get translationNotConfigured => '请先在设置中配置所选翻译方式';
+
+  @override
+  String get checkUpdate => '检查更新';
+
+  @override
+  String get currentVersion => '当前版本';
+
+  @override
+  String get updateAvailable => '发现新版本';
+
+  @override
+  String get updateLater => '稍后';
+
+  @override
+  String get updateDownload => '下载';
+
+  @override
+  String get updateLatest => '当前已是最新版本';
+
+  @override
+  String get updateFailed => '无法检查更新';
+
+  @override
+  String get updateOpenFailed => '无法打开发布页';
+
+  @override
+  String get updateApkHint => '请在发布页选择适合设备的签名 APK。';
 }

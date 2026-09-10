@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../widgets/app_update_host.dart';
 import '../utils/app_settings.dart';
 import '../utils/translation_settings.dart';
 import 'translation_settings_page.dart';
@@ -30,14 +31,8 @@ class SettingsPage extends StatelessWidget {
                 value: 'system',
                 child: Text(l10n.languageSystem),
               ),
-              DropdownMenuItem(
-                value: 'en',
-                child: Text(l10n.languageEnglish),
-              ),
-              DropdownMenuItem(
-                value: 'zh',
-                child: Text(l10n.languageChinese),
-              ),
+              DropdownMenuItem(value: 'en', child: Text(l10n.languageEnglish)),
+              DropdownMenuItem(value: 'zh', child: Text(l10n.languageChinese)),
             ],
             onChanged: (value) {
               if (value != null) {
@@ -58,14 +53,8 @@ class SettingsPage extends StatelessWidget {
                 value: ThemeMode.system,
                 child: Text(l10n.system),
               ),
-              DropdownMenuItem(
-                value: ThemeMode.light,
-                child: Text(l10n.light),
-              ),
-              DropdownMenuItem(
-                value: ThemeMode.dark,
-                child: Text(l10n.dark),
-              ),
+              DropdownMenuItem(value: ThemeMode.light, child: Text(l10n.light)),
+              DropdownMenuItem(value: ThemeMode.dark, child: Text(l10n.dark)),
             ],
             onChanged: (value) {
               if (value != null) {
@@ -74,6 +63,7 @@ class SettingsPage extends StatelessWidget {
             },
           ),
           const SizedBox(height: 8),
+          const CheckUpdateTile(),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.translate),

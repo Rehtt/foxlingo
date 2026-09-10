@@ -271,4 +271,32 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get translationNotConfigured =>
       'Configure the selected translation provider in settings first.';
+
+  @override
+  String get checkUpdate => 'Check for updates';
+
+  @override
+  String get currentVersion => 'Current version';
+
+  @override
+  String get updateAvailable => 'Update available';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get updateDownload => 'Download';
+
+  @override
+  String get updateLatest => 'You are using the latest version';
+
+  @override
+  String get updateFailed => 'Unable to check for updates';
+
+  @override
+  String get updateOpenFailed => 'Unable to open the release page';
+
+  @override
+  String get updateApkHint =>
+      'Choose the signed APK for your device on the release page.';
 }

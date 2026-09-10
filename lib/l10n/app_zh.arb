@@ -76,5 +76,14 @@
   "translationTestFailed": "测试失败：{error}",
   "translationFailed": "翻译失败：{error}",
   "translationNoContent": "没有可翻译的内容",
-  "translationNotConfigured": "请先在设置中配置所选翻译方式"
+  "translationNotConfigured": "请先在设置中配置所选翻译方式",
+  "checkUpdate": "检查更新",
+  "currentVersion": "当前版本",
+  "updateAvailable": "发现新版本",
+  "updateLater": "稍后",
+  "updateDownload": "下载",
+  "updateLatest": "当前已是最新版本",
+  "updateFailed": "无法检查更新",
+  "updateOpenFailed": "无法打开发布页",
+  "updateApkHint": "请在发布页选择适合设备的签名 APK。"
 }

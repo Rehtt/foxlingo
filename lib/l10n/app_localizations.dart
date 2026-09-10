@@ -559,6 +559,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Configure the selected translation provider in settings first.'**
   String get translationNotConfigured;
+
+  /// No description provided for @checkUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get checkUpdate;
+
+  /// No description provided for @currentVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Current version'**
+  String get currentVersion;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updateAvailable;
+
+  /// No description provided for @updateLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get updateLater;
+
+  /// No description provided for @updateDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get updateDownload;
+
+  /// No description provided for @updateLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'You are using the latest version'**
+  String get updateLatest;
+
+  /// No description provided for @updateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to check for updates'**
+  String get updateFailed;
+
+  /// No description provided for @updateOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to open the release page'**
+  String get updateOpenFailed;
+
+  /// No description provided for @updateApkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the signed APK for your device on the release page.'**
+  String get updateApkHint;
 }
 
 class _AppLocalizationsDelegate

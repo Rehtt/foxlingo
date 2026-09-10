@@ -104,5 +104,14 @@
     }
   },
   "translationNoContent": "No content to translate.",
-  "translationNotConfigured": "Configure the selected translation provider in settings first."
+  "translationNotConfigured": "Configure the selected translation provider in settings first.",
+  "checkUpdate": "Check for updates",
+  "currentVersion": "Current version",
+  "updateAvailable": "Update available",
+  "updateLater": "Later",
+  "updateDownload": "Download",
+  "updateLatest": "You are using the latest version",
+  "updateFailed": "Unable to check for updates",
+  "updateOpenFailed": "Unable to open the release page",
+  "updateApkHint": "Choose the signed APK for your device on the release page."
 }
