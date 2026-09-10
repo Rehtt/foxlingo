@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">狐译</string>
+    <string name="screen_translation_notification_title">狐译运行中</string>
+    <string name="screen_translation_notification_stop">停止翻译</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FoxLingo</string>
+    <string name="screen_translation_notification_title">Screen translation is active</string>
+    <string name="screen_translation_notification_stop">Stop translation</string>
+</resources>

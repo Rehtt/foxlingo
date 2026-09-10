@@ -1,0 +1,108 @@
+{
+  "@@locale": "en",
+  "appTitle": "FoxLingo",
+  "cancel": "Cancel",
+  "save": "Save",
+  "settings": "Settings",
+  "displayMode": "Display mode",
+  "system": "System",
+  "light": "Light",
+  "dark": "Dark",
+  "language": "Language",
+  "languageSystem": "System default",
+  "languageEnglish": "English",
+  "languageChinese": "Chinese",
+  "showApiKey": "Show API key",
+  "hideApiKey": "Hide API key",
+  "overlayPermission": "Overlay permission",
+  "overlayPermissionGranted": "Granted. The overlay can appear over other apps.",
+  "overlayPermissionDenied": "Not granted. Android needs this to draw translations over the screen.",
+  "requestOverlayPermission": "Grant overlay permission",
+  "screenCapturePermission": "Screen capture permission",
+  "screenCaptureNotImplemented": "Screen capture is unavailable on this device.",
+  "screenCapturePermissionPending": "Screen capture permission has not been granted for this session.",
+  "screenCapturePermissionCancelled": "Screen capture permission was cancelled.",
+  "screenCapturePermissionDenied": "Screen capture permission was not granted.",
+  "startTranslation": "Start translation",
+  "stopTranslation": "Stop translation",
+  "closeResult": "Close",
+  "translationStarting": "Starting translation session...",
+  "translationReady": "Ready. Tap the floating button in another app to translate.",
+  "translationCapturing": "Capturing the current screen...",
+  "translationResultReady": "Translation result is shown in the overlay.",
+  "translationSessionError": "The translation session needs attention.",
+  "overlaySettingsHint": "Configure translation providers and OCR before starting.",
+  "translationSettings": "Translation settings",
+  "translationProvider": "Translation provider",
+  "translationProviderLlm": "LLM (OpenAI-compatible)",
+  "translationProviderGoogle": "Google Translate",
+  "translationProviderMicrosoft": "Microsoft Translator",
+  "translationGoogleApiKey": "Google Cloud API key",
+  "translationMicrosoftApiKey": "Azure subscription key",
+  "translationMicrosoftRegion": "Azure region",
+  "translationApiBaseUrl": "API base URL",
+  "translationApiKey": "API key",
+  "translationModel": "Model",
+  "translationSystemPrompt": "System prompt",
+  "translationTargetLanguage": "Target language",
+  "translationTargetFollowApp": "Follow app language",
+  "translationSettingsHint": "The placeholder targetLanguage will be replaced with the resolved target language name.",
+  "ocrScript": "OCR script",
+  "ocrScriptLatin": "Latin",
+  "ocrScriptChinese": "Chinese",
+  "ocrScriptJapanese": "Japanese",
+  "ocrScriptKorean": "Korean",
+  "imageTranslationRecognizing": "Recognizing text (OCR)...",
+  "imageTranslationTranslating": "Translating... ({count, plural, =1{1 text block} other{{count} text blocks}})",
+  "@imageTranslationTranslating": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "imageTranslationPrivacyNote": "Image recognition runs on this device. Recognized text is sent to your selected translation provider.",
+  "imageTranslationNoText": "No text was recognized in this image.",
+  "imageTranslationMethod": "Image translation method",
+  "imageTranslationMethodOcr": "On-device OCR + text translation",
+  "imageTranslationMethodLlm": "Vision LLM (recognize and translate)",
+  "imageTranslationLlmApiBaseUrl": "Image translation API base URL",
+  "imageTranslationLlmApiKey": "Image translation API key",
+  "imageTranslationLlmModel": "Image translation model",
+  "imageTranslationLlmFallbackHint": "Leave blank to reuse the LLM settings of text translation.",
+  "imageTranslationLlmInProgress": "Recognizing and translating with the vision model...",
+  "imageTranslationLlmPrivacyNote": "The image is uploaded to the configured LLM API, which recognizes and translates the text.",
+  "imageTranslationLlmNotConfigured": "Configure the image translation LLM API key in translation settings first.",
+  "imageTranslationLlmNoText": "The model did not detect readable text in this image.",
+  "translationInProgress": "Translating...",
+  "translationSaved": "Translation settings saved.",
+  "translationTest": "Test",
+  "imageTranslationTest": "Test image translation",
+  "translationTestSuccess": "Configuration works.",
+  "translationTestSuccessWithResult": "Configuration works. Sample: {result}",
+  "@translationTestSuccessWithResult": {
+    "placeholders": {
+      "result": {
+        "type": "String"
+      }
+    }
+  },
+  "translationTestFailed": "Test failed: {error}",
+  "@translationTestFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "translationFailed": "Translation failed: {error}",
+  "@translationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "translationNoContent": "No content to translate.",
+  "translationNotConfigured": "Configure the selected translation provider in settings first."
+}
