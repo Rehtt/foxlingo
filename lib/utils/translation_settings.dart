@@ -23,6 +23,7 @@ class TranslationSettings extends ChangeNotifier {
       _imageLlmApiBaseUrl = source._imageLlmApiBaseUrl,
       _imageLlmApiKey = source._imageLlmApiKey,
       _imageLlmModel = source._imageLlmModel,
+      _reasoningEffort = source._reasoningEffort,
       _ocrScript = source._ocrScript;
 
   /// Copies the current values without reading or writing secure storage.
@@ -51,6 +52,7 @@ class TranslationSettings extends ChangeNotifier {
   static const String _imageLlmApiBaseUrlKey = 'translation.imageLlmApiBaseUrl';
   static const String _imageLlmApiKeyKey = 'translation.imageLlmApiKey';
   static const String _imageLlmModelKey = 'translation.imageLlmModel';
+  static const String _reasoningEffortKey = 'translation.reasoningEffort';
   static const String _ocrScriptKey = 'translation.ocrScript';
 
   final FlutterSecureStorage _secureStorage;
@@ -68,6 +70,7 @@ class TranslationSettings extends ChangeNotifier {
   String _imageLlmApiBaseUrl = '';
   String _imageLlmApiKey = '';
   String _imageLlmModel = '';
+  String _reasoningEffort = '';
   OcrScript _ocrScript = OcrScript.latin;
 
   TranslationProvider get provider => _provider;
@@ -86,6 +89,7 @@ class TranslationSettings extends ChangeNotifier {
   String get imageLlmApiBaseUrl => _imageLlmApiBaseUrl;
   String get imageLlmApiKey => _imageLlmApiKey;
   String get imageLlmModel => _imageLlmModel;
+  String get reasoningEffort => _reasoningEffort;
 
   String get effectiveImageLlmApiBaseUrl =>
       _imageLlmApiBaseUrl.isEmpty ? _apiBaseUrl : _imageLlmApiBaseUrl;
@@ -118,6 +122,7 @@ class TranslationSettings extends ChangeNotifier {
       'imageLlmApiBaseUrl': _imageLlmApiBaseUrl,
       if (includeApiKey) 'imageLlmApiKey': _imageLlmApiKey,
       'imageLlmModel': _imageLlmModel,
+      'reasoningEffort': _reasoningEffort,
       'ocrScript': _ocrScript.name,
     };
   }
@@ -144,6 +149,7 @@ class TranslationSettings extends ChangeNotifier {
       _imageLlmApiKey = (json['imageLlmApiKey'] as String? ?? '').trim();
     }
     _imageLlmModel = (json['imageLlmModel'] as String? ?? '').trim();
+    _reasoningEffort = (json['reasoningEffort'] as String? ?? '').trim();
     _ocrScript = _normalizeOcrScript(json['ocrScript']);
 
     await _persistAll();
@@ -174,6 +180,8 @@ class TranslationSettings extends ChangeNotifier {
         await _secureStorage.read(key: _imageLlmApiBaseUrlKey) ?? '';
     _imageLlmApiKey = await _secureStorage.read(key: _imageLlmApiKeyKey) ?? '';
     _imageLlmModel = await _secureStorage.read(key: _imageLlmModelKey) ?? '';
+    _reasoningEffort =
+        await _secureStorage.read(key: _reasoningEffortKey) ?? '';
     _ocrScript = _normalizeOcrScript(
       await _secureStorage.read(key: _ocrScriptKey),
     );
@@ -194,6 +202,7 @@ class TranslationSettings extends ChangeNotifier {
     String imageLlmApiBaseUrl = '',
     String imageLlmApiKey = '',
     String imageLlmModel = '',
+    String reasoningEffort = '',
     OcrScript ocrScript = OcrScript.latin,
   }) async {
     _provider = provider;
@@ -213,6 +222,7 @@ class TranslationSettings extends ChangeNotifier {
     _imageLlmApiBaseUrl = imageLlmApiBaseUrl.trim();
     _imageLlmApiKey = imageLlmApiKey.trim();
     _imageLlmModel = imageLlmModel.trim();
+    _reasoningEffort = reasoningEffort.trim();
     _ocrScript = ocrScript;
 
     await _persistAll();
@@ -242,6 +252,10 @@ class TranslationSettings extends ChangeNotifier {
     );
     await _secureStorage.write(key: _imageLlmApiKeyKey, value: _imageLlmApiKey);
     await _secureStorage.write(key: _imageLlmModelKey, value: _imageLlmModel);
+    await _secureStorage.write(
+      key: _reasoningEffortKey,
+      value: _reasoningEffort,
+    );
     await _secureStorage.write(key: _ocrScriptKey, value: _ocrScript.name);
   }
 

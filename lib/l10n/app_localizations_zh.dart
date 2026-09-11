@@ -138,6 +138,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get translationModel => '模型';
 
   @override
+  String get translationReasoningEffort => '思考等级';
+
+  @override
+  String get translationReasoningEffortHint =>
+      '留空则不发送。填写后请求会带 reasoning_effort，不再发送 temperature。也可手动输入服务商支持的其他值。';
+
+  @override
   String get translationSystemPrompt => 'System 提示词';
 
   @override

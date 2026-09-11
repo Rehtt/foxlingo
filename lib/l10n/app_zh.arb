@@ -43,6 +43,8 @@
   "translationApiBaseUrl": "API 地址",
   "translationApiKey": "API Key",
   "translationModel": "模型",
+  "translationReasoningEffort": "思考等级",
+  "translationReasoningEffortHint": "留空则不发送。填写后请求会带 reasoning_effort，不再发送 temperature。也可手动输入服务商支持的其他值。",
   "translationSystemPrompt": "System 提示词",
   "translationTargetLanguage": "目标语言",
   "translationTargetFollowApp": "跟随 App 语言",

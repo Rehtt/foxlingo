@@ -58,6 +58,7 @@ class LlmImageTranslationClient {
       apiBaseUrl: settings.effectiveImageLlmApiBaseUrl,
       apiKey: settings.effectiveImageLlmApiKey,
       model: settings.effectiveImageLlmModel,
+      reasoningEffort: settings.reasoningEffort,
       systemMessage: _systemPromptTemplate.replaceAll(
         '{targetLanguage}',
         targetLanguage,
@@ -158,6 +159,7 @@ class LlmImageTranslationClient {
     required String apiBaseUrl,
     required String apiKey,
     required String model,
+    String reasoningEffort = '',
   }) async {
     final trimmedKey = apiKey.trim();
     if (trimmedKey.isEmpty) {
@@ -172,6 +174,7 @@ class LlmImageTranslationClient {
       model: model.trim().isEmpty
           ? TranslationSettings.defaultModel
           : model.trim(),
+      reasoningEffort: reasoningEffort.trim(),
       systemMessage: _testSystemMessage,
       imageDataUrl: 'data:image/png;base64,${base64Encode(_testPngBytes)}',
     ).timeout(_testTimeout);
@@ -183,6 +186,7 @@ class LlmImageTranslationClient {
     required String model,
     required String systemMessage,
     required String imageDataUrl,
+    String reasoningEffort = '',
     Future<void>? abortTrigger,
   }) async {
     final baseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), '');
@@ -202,7 +206,10 @@ class LlmImageTranslationClient {
           ],
         },
       ],
-      'temperature': 0.1,
+      if (reasoningEffort.isEmpty)
+        'temperature': 0.1
+      else
+        'reasoning_effort': reasoningEffort,
     });
 
     final request =
@@ -244,11 +251,16 @@ class LlmImageTranslationClient {
     }
 
     final content = message['content'];
-    if (content is! String || content.trim().isEmpty) {
+    if (content is! String) {
       throw StateError('Image translation response did not include content.');
     }
 
-    return content.trim();
+    final withoutThink = LlmResponseUtils.stripThinkTags(content);
+    if (withoutThink.isEmpty) {
+      throw StateError('Image translation response did not include content.');
+    }
+
+    return LlmResponseUtils.stripCodeFence(withoutThink);
   }
 
   List<ImageTextRegion> _parseRegions(String responseText) {

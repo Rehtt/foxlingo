@@ -43,6 +43,8 @@
   "translationApiBaseUrl": "API base URL",
   "translationApiKey": "API key",
   "translationModel": "Model",
+  "translationReasoningEffort": "Thinking level",
+  "translationReasoningEffortHint": "Leave blank to omit. When set, the request sends reasoning_effort and not temperature. You can type any value the provider accepts.",
   "translationSystemPrompt": "System prompt",
   "translationTargetLanguage": "Target language",
   "translationTargetFollowApp": "Follow app language",

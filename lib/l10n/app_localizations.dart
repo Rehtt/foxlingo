@@ -356,6 +356,18 @@ abstract class AppLocalizations {
   /// **'Model'**
   String get translationModel;
 
+  /// No description provided for @translationReasoningEffort.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking level'**
+  String get translationReasoningEffort;
+
+  /// No description provided for @translationReasoningEffortHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank to omit. When set, the request sends reasoning_effort and not temperature. You can type any value the provider accepts.'**
+  String get translationReasoningEffortHint;
+
   /// No description provided for @translationSystemPrompt.
   ///
   /// In en, this message translates to:

@@ -148,6 +148,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translationModel => 'Model';
 
   @override
+  String get translationReasoningEffort => 'Thinking level';
+
+  @override
+  String get translationReasoningEffortHint =>
+      'Leave blank to omit. When set, the request sends reasoning_effort and not temperature. You can type any value the provider accepts.';
+
+  @override
   String get translationSystemPrompt => 'System prompt';
 
   @override

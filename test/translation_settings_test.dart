@@ -155,6 +155,47 @@ void main() {
     expect(restored.microsoftRegion, 'global');
     expect(restored.targetLanguage, 'en');
     expect(restored.ocrScript, OcrScript.japanese);
+    expect(restored.reasoningEffort, '');
+  });
+
+  test('backup json round-trips reasoningEffort and trims on save', () async {
+    final settings = TranslationSettings();
+
+    await settings.save(
+      provider: TranslationProvider.llm,
+      apiBaseUrl: TranslationSettings.defaultApiBaseUrl,
+      apiKey: 'llm-key',
+      model: TranslationSettings.defaultModel,
+      systemPrompt: TranslationSettings.defaultSystemPrompt,
+      targetLanguage: 'follow_app',
+      googleApiKey: '',
+      microsoftApiKey: '',
+      microsoftRegion: '',
+      reasoningEffort: '  xhigh  ',
+    );
+
+    expect(settings.reasoningEffort, 'xhigh');
+    expect(settings.snapshot().reasoningEffort, 'xhigh');
+
+    final backup = settings.toBackupJson();
+    expect(backup['reasoningEffort'], 'xhigh');
+
+    final restored = TranslationSettings();
+    await restored.applyBackupJson(backup);
+    expect(restored.reasoningEffort, 'xhigh');
+  });
+
+  test('backup without reasoningEffort stays empty', () async {
+    final restored = TranslationSettings();
+    await restored.applyBackupJson({
+      'apiBaseUrl': 'https://example.com/v1',
+      'apiKey': 'secret',
+      'model': 'gpt-4o-mini',
+      'systemPrompt': TranslationSettings.defaultSystemPrompt,
+      'targetLanguage': 'zh',
+    });
+
+    expect(restored.reasoningEffort, '');
   });
 
   test('backup without provider defaults to llm and latin OCR', () async {

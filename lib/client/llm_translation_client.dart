@@ -30,6 +30,7 @@ class LlmTranslationClient {
       apiBaseUrl: settings.apiBaseUrl,
       apiKey: settings.apiKey,
       model: settings.model,
+      reasoningEffort: settings.reasoningEffort,
       systemMessage: settings.buildSystemMessage(
         appLocale: appLocale,
         deviceLocale: deviceLocale,
@@ -57,6 +58,7 @@ class LlmTranslationClient {
     required String apiKey,
     required String model,
     required String systemMessage,
+    String reasoningEffort = '',
   }) {
     final trimmedKey = apiKey.trim();
     if (trimmedKey.isEmpty) {
@@ -71,6 +73,7 @@ class LlmTranslationClient {
       model: model.trim().isEmpty
           ? TranslationSettings.defaultModel
           : model.trim(),
+      reasoningEffort: reasoningEffort.trim(),
       systemMessage: systemMessage,
       userMessage: _testUserMessage,
     ).timeout(_testTimeout);
@@ -82,6 +85,7 @@ class LlmTranslationClient {
     required String model,
     required String systemMessage,
     required String userMessage,
+    String reasoningEffort = '',
     Future<void>? abortTrigger,
   }) async {
     final baseUrl = apiBaseUrl.replaceAll(RegExp(r'/+$'), '');
@@ -92,7 +96,10 @@ class LlmTranslationClient {
         {'role': 'system', 'content': systemMessage},
         {'role': 'user', 'content': userMessage},
       ],
-      'temperature': 0.2,
+      if (reasoningEffort.isEmpty)
+        'temperature': 0.2
+      else
+        'reasoning_effort': reasoningEffort,
     });
 
     final request =
@@ -133,11 +140,16 @@ class LlmTranslationClient {
     }
 
     final content = message['content'];
-    if (content is! String || content.trim().isEmpty) {
+    if (content is! String) {
       throw StateError('Translation response did not include content.');
     }
 
-    return LlmResponseUtils.stripCodeFence(content.trim());
+    final withoutThink = LlmResponseUtils.stripThinkTags(content);
+    if (withoutThink.isEmpty) {
+      throw StateError('Translation response did not include content.');
+    }
+
+    return LlmResponseUtils.stripCodeFence(withoutThink);
   }
 
   List<String> _parseLineResponse(String responseText, int expectedCount) {

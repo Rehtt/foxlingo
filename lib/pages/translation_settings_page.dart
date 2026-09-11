@@ -37,6 +37,7 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
   late final TextEditingController _imageLlmApiBaseUrlController;
   late final TextEditingController _imageLlmApiKeyController;
   late final TextEditingController _imageLlmModelController;
+  late final TextEditingController _reasoningEffortController;
   late TranslationProvider _provider;
   late ImageTranslationMethod _imageMethod;
   late OcrScript _ocrScript;
@@ -87,6 +88,9 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
     _imageLlmModelController = TextEditingController(
       text: widget.settings.imageLlmModel,
     );
+    _reasoningEffortController = TextEditingController(
+      text: widget.settings.reasoningEffort,
+    );
     _targetLanguage = widget.settings.targetLanguage;
   }
 
@@ -102,6 +106,7 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
     _imageLlmApiBaseUrlController.dispose();
     _imageLlmApiKeyController.dispose();
     _imageLlmModelController.dispose();
+    _reasoningEffortController.dispose();
     super.dispose();
   }
 
@@ -121,6 +126,7 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
       imageLlmApiBaseUrl: _imageLlmApiBaseUrlController.text,
       imageLlmApiKey: _imageLlmApiKeyController.text,
       imageLlmModel: _imageLlmModelController.text,
+      reasoningEffort: _reasoningEffortController.text,
       ocrScript: _ocrScript,
     );
     if (!mounted) {
@@ -197,6 +203,7 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
           apiBaseUrl: _apiBaseUrlController.text,
           apiKey: _apiKeyController.text,
           model: _modelController.text,
+          reasoningEffort: _reasoningEffortController.text,
           systemMessage: TranslationSettings.systemMessageFor(
             systemPrompt: _systemPromptController.text,
             preference: _targetLanguage,
@@ -261,6 +268,7 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
         apiBaseUrl: _effectiveImageLlmApiBaseUrl,
         apiKey: _effectiveImageLlmApiKey,
         model: _effectiveImageLlmModel,
+        reasoningEffort: _reasoningEffortController.text,
       );
       if (!mounted) {
         return;
@@ -318,6 +326,23 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
           icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
         ),
       ),
+    );
+  }
+
+  Widget _buildReasoningEffortField(AppLocalizations l10n) {
+    return DropdownMenu<String>(
+      controller: _reasoningEffortController,
+      requestFocusOnTap: true,
+      expandedInsets: EdgeInsets.zero,
+      label: Text(l10n.translationReasoningEffort),
+      helperText: l10n.translationReasoningEffortHint,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+      ),
+      dropdownMenuEntries: [
+        for (final value in llmReasoningEffortPresets)
+          DropdownMenuEntry<String>(value: value, label: value),
+      ],
     );
   }
 
@@ -388,6 +413,8 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
                 border: const OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 16),
+            _buildReasoningEffortField(l10n),
             const SizedBox(height: 16),
             TextFormField(
               controller: _systemPromptController,
@@ -552,6 +579,10 @@ class _TranslationSettingsPageState extends State<TranslationSettingsPage> {
                 border: const OutlineInputBorder(),
               ),
             ),
+            if (_provider != TranslationProvider.llm) ...[
+              const SizedBox(height: 16),
+              _buildReasoningEffortField(l10n),
+            ],
             const SizedBox(height: 16),
             _buildTestButton(
               isTesting: _isTestingImage,

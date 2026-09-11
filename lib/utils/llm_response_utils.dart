@@ -1,6 +1,39 @@
 class LlmResponseUtils {
   const LlmResponseUtils._();
 
+  static final RegExp _completeThinkBlock = RegExp(
+    r'<think\b[^>]*>[\s\S]*?</think>',
+    caseSensitive: false,
+  );
+  static final RegExp _closingThink = RegExp(
+    r'</think>',
+    caseSensitive: false,
+  );
+  static final RegExp _openingThink = RegExp(
+    r'<think\b[^>]*>',
+    caseSensitive: false,
+  );
+
+  /// Removes reasoning that some gateways embed in `content`.
+  ///
+  /// Handles complete `<think>…</think>` blocks, a leftover closing tag
+  /// (the opening tag was swallowed), and an unclosed opening tag.
+  static String stripThinkTags(String text) {
+    var result = text.replaceAll(_completeThinkBlock, '');
+
+    final closingMatches = _closingThink.allMatches(result);
+    if (closingMatches.isNotEmpty) {
+      result = result.substring(closingMatches.last.end);
+    }
+
+    final openingMatch = _openingThink.firstMatch(result);
+    if (openingMatch != null) {
+      result = result.substring(0, openingMatch.start);
+    }
+
+    return result.trim();
+  }
+
   static String stripCodeFence(String text) {
     if (!text.startsWith('```')) {
       return text;
