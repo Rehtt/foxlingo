@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'controllers/screen_translation_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'pages/home_page.dart';
+import 'pages/settings_page.dart';
 import 'platform/translation_bridge.dart';
 import 'utils/app_settings.dart';
 import 'utils/translation_settings.dart';
@@ -46,9 +49,36 @@ class _FoxLingoAppState extends State<FoxLingoApp> {
       widget.controller ??
       ScreenTranslationController(settings: widget.translationSettings);
   late final bool _ownsController = widget.controller == null;
+  StreamSubscription<void>? _settingsSubscription;
+  Future<void>? _openedSettingsRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _settingsSubscription = _controller.settingsRequests.listen(
+      (_) => _openSettingsFromOverlay(),
+    );
+  }
+
+  void _openSettingsFromOverlay() {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null || _openedSettingsRoute != null) {
+      return;
+    }
+    final route = navigator.push<void>(
+      MaterialPageRoute<void>(builder: (context) => const SettingsPage()),
+    );
+    _openedSettingsRoute = route;
+    route.whenComplete(() {
+      if (identical(_openedSettingsRoute, route)) {
+        _openedSettingsRoute = null;
+      }
+    });
+  }
 
   @override
   void dispose() {
+    unawaited(_settingsSubscription?.cancel() ?? Future<void>.value());
     if (_ownsController) {
       _controller.dispose();
     }

@@ -79,6 +79,20 @@ class TranslationBridge {
     }
   }
 
+  /// Brings the existing main Activity to the foreground.
+  Future<void> openMainActivity() async {
+    if (!isMain) {
+      return;
+    }
+    try {
+      await _controlChannel.invokeMethod<bool>('openMainActivity');
+    } on MissingPluginException {
+      // Desktop tests and incomplete plugin registration skip this call.
+    } on PlatformException {
+      // The Activity may already be finishing or blocked by the system.
+    }
+  }
+
   /// Returns the real display size in logical pixels for the overlay engine.
   Future<Size?> displaySize() async {
     if (isMain) {

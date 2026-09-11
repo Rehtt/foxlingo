@@ -17,6 +17,8 @@ abstract interface class OverlayController {
   Stream<TranslationBridgeMessage> get messages;
 
   Future<void> send(TranslationBridgeMessage message);
+
+  Future<void> openApp();
 }
 
 /// Position math for the 56dp bubble used by the overlay window.
@@ -45,6 +47,17 @@ class OverlayPositioning {
       position.x.clamp(0.0, maxRightOffset).toDouble(),
       position.y.clamp(-maxVerticalOffset, maxVerticalOffset).toDouble(),
     );
+  }
+
+  /// Converts a center-right overlay offset into a window-local bubble rect.
+  static Rect bubbleRect(OverlayPosition position, Size windowSize) {
+    final right = windowSize.width - position.x;
+    final centerY = windowSize.height / 2 + position.y;
+    final maxLeft = (windowSize.width - bubbleSize).clamp(0.0, double.infinity);
+    final maxTop = (windowSize.height - bubbleSize).clamp(0.0, double.infinity);
+    final left = (right - bubbleSize).clamp(0.0, maxLeft);
+    final top = (centerY - bubbleSize / 2).clamp(0.0, maxTop);
+    return Rect.fromLTWH(left, top, bubbleSize, bubbleSize);
   }
 }
 
@@ -92,6 +105,9 @@ class FlutterOverlayController implements OverlayController {
   Future<void> send(TranslationBridgeMessage message) async {
     await _bridge.send(message);
   }
+
+  @override
+  Future<void> openApp() => _bridge.openMainActivity();
 
   /// Releases the Dart-side channel when an injected controller is no longer
   /// used. The production controller lives for the process lifetime.

@@ -31,6 +31,9 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
   OverlayPosition? _bubblePosition;
   int _preparationGeneration = 0;
   String? _lastClosedRequestId;
+  bool _menuOpen = false;
+  OverlayPosition? _menuAnchor;
+  int _menuGeneration = 0;
 
   @override
   void initState() {
@@ -136,6 +139,7 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
     _bubblePosition = null;
     _fullScreen = null;
     _lastClosedRequestId = null;
+    _resetMenu();
     if (mounted) {
       setState(() {
         _overlayState = _OverlayState(
@@ -186,6 +190,7 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
       _evictFrameImage();
     }
     setState(() {
+      _resetMenu();
       _overlayState = _overlayState.copyWith(
         sessionId: sessionId,
         requestId: nextRequestId,
@@ -226,6 +231,7 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
       return;
     }
     setState(() {
+      _resetMenu();
       _overlayState = _overlayState.copyWith(
         sessionId: sessionId,
         requestId: requestId,
@@ -351,6 +357,60 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
     });
   }
 
+  void _resetMenu() {
+    _menuGeneration++;
+    _menuOpen = false;
+    _menuAnchor = null;
+  }
+
+  Future<void> _openMenu() async {
+    if (_overlayState.preparing || _needsFullScreen(_overlayState.state)) {
+      return;
+    }
+    if (_menuOpen && _menuAnchor != null) {
+      return;
+    }
+    final generation = ++_menuGeneration;
+    if (mounted) {
+      setState(() {
+        _menuOpen = true;
+        _menuAnchor = null;
+      });
+    }
+    await _setWindowMode(true);
+    if (!mounted || generation != _menuGeneration || !_menuOpen) {
+      return;
+    }
+    setState(() {
+      _menuAnchor = _bubblePosition ?? const OverlayPosition(0, 0);
+    });
+  }
+
+  Future<void> _closeMenu() async {
+    if (!_menuOpen && _menuAnchor == null) {
+      return;
+    }
+    _menuGeneration++;
+    if (mounted) {
+      setState(() {
+        _menuOpen = false;
+        _menuAnchor = null;
+      });
+    } else {
+      _menuOpen = false;
+      _menuAnchor = null;
+    }
+    if (_needsFullScreen(_overlayState.state) || _overlayState.preparing) {
+      return;
+    }
+    await _setWindowMode(false);
+  }
+
+  Future<void> _onMenuAction(String type) async {
+    await _closeMenu();
+    await _sendAction(type);
+  }
+
   Future<void> _setWindowMode(bool fullScreen, {bool force = false}) {
     if (!force && _fullScreen == fullScreen) {
       return _windowOperation;
@@ -440,6 +500,7 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
       return;
     }
     setState(() {
+      _resetMenu();
       _overlayState = const _OverlayState(state: 'stopped');
     });
   }
@@ -477,7 +538,12 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
       home: _OverlaySurface(
         state: _overlayState,
         frameImage: _frameImage,
+        menuOpen: _menuOpen,
+        menuAnchor: _menuAnchor,
         onAction: _sendAction,
+        onOpenMenu: _openMenu,
+        onCloseMenu: _closeMenu,
+        onMenuAction: _onMenuAction,
       ),
     );
   }
@@ -487,12 +553,22 @@ class _OverlaySurface extends StatelessWidget {
   const _OverlaySurface({
     required this.state,
     required this.frameImage,
+    required this.menuOpen,
+    required this.menuAnchor,
     required this.onAction,
+    required this.onOpenMenu,
+    required this.onCloseMenu,
+    required this.onMenuAction,
   });
 
   final _OverlayState state;
   final MemoryImage? frameImage;
+  final bool menuOpen;
+  final OverlayPosition? menuAnchor;
   final Future<void> Function(String type) onAction;
+  final Future<void> Function() onOpenMenu;
+  final Future<void> Function() onCloseMenu;
+  final Future<void> Function(String type) onMenuAction;
 
   @override
   Widget build(BuildContext context) {
@@ -512,15 +588,72 @@ class _OverlaySurface extends StatelessWidget {
         onAction: onAction,
       );
     }
-    return _BubbleSurface(state: state, onAction: onAction);
+    if (menuOpen && menuAnchor == null) {
+      return const Material(
+        color: Colors.transparent,
+        child: SizedBox.expand(),
+      );
+    }
+    if (menuOpen && menuAnchor != null) {
+      return _BubbleMenuSurface(
+        state: state,
+        anchor: menuAnchor!,
+        onDismiss: onCloseMenu,
+        onAction: onMenuAction,
+      );
+    }
+    return _BubbleSurface(
+      state: state,
+      onAction: onAction,
+      onOpenMenu: onOpenMenu,
+    );
+  }
+}
+
+class _BubbleIcon extends StatelessWidget {
+  const _BubbleIcon({required this.busy});
+
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: BoxDecoration(
+        color: const Color(0xff2f6f73),
+        shape: BoxShape.circle,
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: busy
+          ? const Padding(
+              padding: EdgeInsets.all(15),
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              ),
+            )
+          : const Icon(Icons.translate, color: Colors.white),
+    );
   }
 }
 
 class _BubbleSurface extends StatelessWidget {
-  const _BubbleSurface({required this.state, required this.onAction});
+  const _BubbleSurface({
+    required this.state,
+    required this.onAction,
+    required this.onOpenMenu,
+  });
 
   final _OverlayState state;
   final Future<void> Function(String type) onAction;
+  final Future<void> Function() onOpenMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -538,35 +671,167 @@ class _BubbleSurface extends StatelessWidget {
         onTap: state.state == 'ready' && !state.preparing
             ? () => unawaited(onAction('translate'))
             : null,
-        onLongPress: () => unawaited(onAction('stop')),
-        child: Center(
-          child: Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: const Color(0xff2f6f73),
-              shape: BoxShape.circle,
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black38,
-                  blurRadius: 8,
-                  offset: Offset(0, 3),
-                ),
-              ],
+        onLongPress: () => unawaited(onOpenMenu()),
+        child: Center(child: _BubbleIcon(busy: busy)),
+      ),
+    );
+  }
+}
+
+class _BubbleMenuSurface extends StatelessWidget {
+  const _BubbleMenuSurface({
+    required this.state,
+    required this.anchor,
+    required this.onDismiss,
+    required this.onAction,
+  });
+
+  final _OverlayState state;
+  final OverlayPosition anchor;
+  final Future<void> Function() onDismiss;
+  final Future<void> Function(String type) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final windowSize = MediaQuery.sizeOf(context);
+    final safePadding = MediaQuery.paddingOf(context);
+    final bubble = OverlayPositioning.bubbleRect(anchor, windowSize);
+    final busy = state.state == 'starting';
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => unawaited(onDismiss()),
+              child: const ColoredBox(color: Colors.transparent),
             ),
-            child: busy
-                ? const Padding(
-                    padding: EdgeInsets.all(15),
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(Icons.translate, color: Colors.white),
           ),
+          Positioned(
+            left: bubble.left,
+            top: bubble.top,
+            width: bubble.width,
+            height: bubble.height,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => unawaited(onDismiss()),
+              child: Center(child: _BubbleIcon(busy: busy)),
+            ),
+          ),
+          CustomSingleChildLayout(
+            delegate: _BubbleMenuLayoutDelegate(
+              bubbleRect: bubble,
+              safePadding: safePadding,
+            ),
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              color: Theme.of(context).colorScheme.surface,
+              clipBehavior: Clip.antiAlias,
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _BubbleMenuItem(
+                      icon: Icons.settings,
+                      label: l10n.settings,
+                      onTap: () => unawaited(onAction('openSettings')),
+                    ),
+                    const Divider(height: 1),
+                    _BubbleMenuItem(
+                      icon: Icons.close,
+                      label: l10n.closeResult,
+                      onTap: () => unawaited(onAction('stop')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BubbleMenuItem extends StatelessWidget {
+  const _BubbleMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 12),
+            Text(label),
+          ],
         ),
       ),
     );
+  }
+}
+
+class _BubbleMenuLayoutDelegate extends SingleChildLayoutDelegate {
+  const _BubbleMenuLayoutDelegate({
+    required this.bubbleRect,
+    required this.safePadding,
+  });
+
+  final Rect bubbleRect;
+  final EdgeInsets safePadding;
+
+  static const double _gap = 8;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final maxWidth = (constraints.maxWidth - safePadding.horizontal - 16).clamp(
+      0.0,
+      constraints.maxWidth,
+    );
+    final maxHeight = (constraints.maxHeight - safePadding.vertical - 16)
+        .clamp(0.0, constraints.maxHeight);
+    return BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight);
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final preferLeft = bubbleRect.center.dx >= size.width / 2;
+    final minX = safePadding.left + _gap;
+    var maxX = size.width - safePadding.right - _gap - childSize.width;
+    if (maxX < minX) {
+      maxX = minX;
+    }
+    final minY = safePadding.top + _gap;
+    var maxY = size.height - safePadding.bottom - _gap - childSize.height;
+    if (maxY < minY) {
+      maxY = minY;
+    }
+    final x = preferLeft
+        ? bubbleRect.left - _gap - childSize.width
+        : bubbleRect.right + _gap;
+    final y = bubbleRect.center.dy - childSize.height / 2;
+    return Offset(x.clamp(minX, maxX), y.clamp(minY, maxY));
+  }
+
+  @override
+  bool shouldRelayout(_BubbleMenuLayoutDelegate oldDelegate) {
+    return bubbleRect != oldDelegate.bubbleRect ||
+        safePadding != oldDelegate.safePadding;
   }
 }
 

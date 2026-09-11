@@ -91,12 +91,16 @@ class ScreenTranslationController extends ChangeNotifier {
   Completer<void>? _stopCompletion;
   bool _captureSessionUnavailable = false;
   bool _disposed = false;
+  final StreamController<void> _settingsRequests =
+      StreamController<void>.broadcast();
 
   ScreenTranslationState get state => _state;
   String? get errorCode => _errorCode;
   String? get errorMessage => _errorMessage;
   bool get isSessionActive =>
       _sessionId != null && _state != ScreenTranslationState.stopped;
+  Stream<void> get settingsRequests => _settingsRequests.stream;
+
   bool get isBusy => switch (_state) {
     ScreenTranslationState.starting ||
     ScreenTranslationState.capturing ||
@@ -619,6 +623,8 @@ class ScreenTranslationController extends ChangeNotifier {
         }
       case 'stop':
         unawaited(stop());
+      case 'openSettings':
+        unawaited(_handleOpenSettings());
       case 'capturePrepared':
         final requestId = message['requestId'];
         if (requestId == _activeRequest?.requestId) {
@@ -692,6 +698,17 @@ class ScreenTranslationController extends ChangeNotifier {
     _clearError();
     _setState(ScreenTranslationState.ready);
     await _sendSnapshot();
+  }
+
+  Future<void> _handleOpenSettings() async {
+    if (!_settingsRequests.isClosed) {
+      _settingsRequests.add(null);
+    }
+    try {
+      await _overlay.openApp();
+    } on Object {
+      // Bringing the Activity forward can fail in tests or after teardown.
+    }
   }
 
   Future<void> _handleExternalStop() => stop();
@@ -901,6 +918,7 @@ class ScreenTranslationController extends ChangeNotifier {
     _disposed = true;
     unawaited(_overlaySubscription.cancel());
     unawaited(_captureSubscription.cancel());
+    unawaited(_settingsRequests.close());
     final request = _activeRequest;
     if (request != null) {
       _invalidateRequest(request);

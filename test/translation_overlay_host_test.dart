@@ -339,6 +339,187 @@ void main() {
     expect(find.byIcon(Icons.translate), findsOneWidget);
     await bridge.close();
   });
+
+  testWidgets('long-pressing the ready bubble opens a closable menu', (
+    tester,
+  ) async {
+    final bridge = _TestBridge();
+    final windowCalls = <MethodCall>[];
+    _stubOverlayWindow(tester, windowCalls: windowCalls);
+    await _pumpReadyBubble(tester, bridge);
+
+    await tester.longPress(find.byIcon(Icons.translate));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    expect(
+      _hasResize(
+        windowCalls,
+        width: 1080,
+        height: 1920,
+        enableDrag: false,
+      ),
+      isTrue,
+    );
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(bridge.sent.last['type'], 'stop');
+    await bridge.close();
+  });
+
+  testWidgets('choosing Settings sends openSettings and restores the bubble', (
+    tester,
+  ) async {
+    final bridge = _TestBridge();
+    final windowCalls = <MethodCall>[];
+    _stubOverlayWindow(tester, windowCalls: windowCalls);
+    await _pumpReadyBubble(tester, bridge);
+
+    await tester.longPress(find.byIcon(Icons.translate));
+    await tester.pumpAndSettle();
+    windowCalls.clear();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(
+      bridge.sent.where((message) => message['type'] == 'openSettings'),
+      hasLength(1),
+    );
+    expect(
+      _hasResize(windowCalls, width: 56, height: 56, enableDrag: true),
+      isTrue,
+    );
+    expect(find.text('Settings'), findsNothing);
+    await bridge.close();
+  });
+
+  testWidgets('tapping the menu mask dismisses it without a session action', (
+    tester,
+  ) async {
+    final bridge = _TestBridge();
+    _stubOverlayWindow(tester, windowCalls: <MethodCall>[]);
+    await _pumpReadyBubble(tester, bridge);
+    await tester.longPress(find.byIcon(Icons.translate));
+    await tester.pumpAndSettle();
+    final sentBefore = List<TranslationBridgeMessage>.from(bridge.sent);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsNothing);
+    expect(find.text('Close'), findsNothing);
+    expect(bridge.sent, sentBefore);
+    await bridge.close();
+  });
+
+  testWidgets('a ready snapshot closes the bubble menu', (tester) async {
+    final bridge = _TestBridge();
+    _stubOverlayWindow(tester, windowCalls: <MethodCall>[]);
+    await _pumpReadyBubble(tester, bridge);
+    await tester.longPress(find.byIcon(Icons.translate));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsOneWidget);
+
+    bridge.emit(const {
+      'version': 1,
+      'type': 'state',
+      'sessionId': 's1',
+      'payload': {'state': 'ready', 'locale': 'en'},
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsNothing);
+    expect(find.byIcon(Icons.translate), findsOneWidget);
+    await bridge.close();
+  });
+
+  test('maps center-right bubble offsets to a window-local rect', () {
+    expect(
+      OverlayPositioning.bubbleRect(
+        const OverlayPosition(0, 0),
+        const Size(1080, 1920),
+      ),
+      const Rect.fromLTWH(1024, 932, 56, 56),
+    );
+    expect(
+      OverlayPositioning.bubbleRect(
+        const OverlayPosition(1024, 932),
+        const Size(1080, 1920),
+      ),
+      const Rect.fromLTWH(0, 1864, 56, 56),
+    );
+  });
+}
+
+void _stubOverlayWindow(
+  WidgetTester tester, {
+  required List<MethodCall> windowCalls,
+  Map<String, double> position = const <String, double>{'x': 10, 'y': 20},
+}) {
+  var current = Map<String, double>.from(position);
+  const main = MethodChannel('x-slayer/overlay_channel');
+  const overlay = MethodChannel('x-slayer/overlay');
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(main, (
+    call,
+  ) async {
+    windowCalls.add(call);
+    if (call.method == 'getOverlayPosition') {
+      return current;
+    }
+    if (call.method == 'moveOverlay') {
+      final args = call.arguments as Map;
+      current = {
+        'x': (args['x'] as num).toDouble(),
+        'y': (args['y'] as num).toDouble(),
+      };
+    }
+    return true;
+  });
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(overlay, (
+    call,
+  ) async {
+    windowCalls.add(call);
+    return true;
+  });
+  addTearDown(() {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(main, null);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      overlay,
+      null,
+    );
+  });
+}
+
+Future<void> _pumpReadyBubble(WidgetTester tester, _TestBridge bridge) async {
+  await tester.pumpWidget(TranslationOverlayApp(bridge: bridge));
+  bridge.emit(const {'version': 1, 'type': 'handshake', 'sessionId': 's1'});
+  await tester.pump();
+  bridge.emit(const {
+    'version': 1,
+    'type': 'state',
+    'sessionId': 's1',
+    'payload': {'state': 'ready', 'locale': 'en'},
+  });
+  await tester.pumpAndSettle();
+}
+
+bool _hasResize(
+  List<MethodCall> calls, {
+  required int width,
+  required int height,
+  required bool enableDrag,
+}) {
+  return calls.any((call) {
+    if (call.method != 'resizeOverlay') {
+      return false;
+    }
+    final args = call.arguments as Map;
+    return args['width'] == width &&
+        args['height'] == height &&
+        args['enableDrag'] == enableDrag;
+  });
 }
 
 class _TestBridge extends TranslationBridge {

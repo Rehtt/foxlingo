@@ -1,6 +1,7 @@
 package com.rehtt.foxlingo
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Point
 import android.os.Build
 import android.view.WindowManager
@@ -37,9 +38,23 @@ object ScreenTranslationBridge {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "bindOverlay" -> result.success(bindOverlay())
+                    "openMainActivity" -> result.success(openMainActivity())
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun openMainActivity(): Boolean {
+        val context = applicationContext ?: return false
+        return try {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            context.startActivity(intent)
+            true
+        } catch (_: RuntimeException) {
+            false
+        }
     }
 
     private fun bindOverlay(): Boolean {

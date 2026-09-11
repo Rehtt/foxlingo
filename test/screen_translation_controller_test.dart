@@ -588,6 +588,41 @@ void main() {
     },
   );
 
+  test('openSettings from the current session brings the app forward', () async {
+    final overlay = _FakeOverlay();
+    final controller = _controller(
+      await _configuredSettings(),
+      _FakeCapture(),
+      overlay,
+    );
+    addTearDown(controller.dispose);
+    await controller.start();
+    final sessionId = overlay.sent.firstWhere(
+      (message) => message['type'] == 'handshake',
+    )['sessionId'];
+    var requests = 0;
+    final subscription = controller.settingsRequests.listen((_) => requests++);
+    addTearDown(subscription.cancel);
+
+    overlay.emit({
+      'version': 1,
+      'type': 'openSettings',
+      'sessionId': sessionId,
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(requests, 1);
+    expect(overlay.openAppCalls, 1);
+
+    overlay.emit(const {
+      'version': 1,
+      'type': 'openSettings',
+      'sessionId': 'other',
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(requests, 1);
+    expect(overlay.openAppCalls, 1);
+  });
+
   test(
     'geometry change during capture returns to ready and ignores old work',
     () async {
@@ -743,6 +778,7 @@ class _FakeOverlay implements OverlayController {
   final Completer<void> prepareSent = Completer<void>();
   int showCalls = 0;
   int hideCalls = 0;
+  int openAppCalls = 0;
 
   @override
   Stream<TranslationBridgeMessage> get messages => _messages.stream;
@@ -763,6 +799,9 @@ class _FakeOverlay implements OverlayController {
   Future<bool> bind() async {
     return true;
   }
+
+  @override
+  Future<void> openApp() async => openAppCalls++;
 
   @override
   Future<void> send(TranslationBridgeMessage message) async {
