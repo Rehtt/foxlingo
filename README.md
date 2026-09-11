@@ -1,4 +1,8 @@
-# FoxLingo · 狐译
+<p align="center">
+  <img src="assets/app_icon.png" alt="FoxLingo logo" width="160">
+</p>
+
+<h1 align="center">FoxLingo · 狐译</h1>
 
 基于 Flutter 的 Android 屏幕翻译应用。切换到其他应用后，点击悬浮球截取当前屏幕，识别文字并将译文覆盖到对应位置。
 
