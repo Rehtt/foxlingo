@@ -121,7 +121,6 @@ class ImageTranslationOverlay extends StatelessWidget {
   }
 }
 
-@visibleForTesting
 Rect containedImageRect({
   required Size viewport,
   required double imageAspectRatio,

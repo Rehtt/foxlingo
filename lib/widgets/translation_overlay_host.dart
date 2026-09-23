@@ -195,6 +195,12 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
         sessionId: sessionId,
         requestId: nextRequestId,
         state: nextState,
+        translationMode: data['translationMode'] == 'region'
+            ? 'region'
+            : data['translationMode'] == 'fullScreen'
+            ? 'fullScreen'
+            : _overlayState.translationMode,
+        hasSelectedRegion: data['hasSelectedRegion'] == true,
         locale: data['locale'] is String
             ? data['locale'] as String
             : _overlayState.locale,
@@ -204,6 +210,8 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
         errorMessage: data['errorMessage'] is String
             ? data['errorMessage'] as String
             : null,
+        frameWidth: _asInt(data['frameWidth']),
+        frameHeight: _asInt(data['frameHeight']),
         preparing: endPreparation ? false : _overlayState.preparing,
         clearProgress: endPreparation,
         clearRequest: resetTask || nextRequestId == null,
@@ -344,7 +352,7 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
     unawaited(_setWindowMode(true));
   }
 
-  Future<void> _sendAction(String type) async {
+  Future<void> _sendAction(String type, {Map<String, dynamic>? payload}) async {
     final sessionId = _overlayState.sessionId;
     if (sessionId == null) {
       return;
@@ -353,9 +361,17 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
       'version': 1,
       'type': type,
       'sessionId': sessionId,
-      if (_overlayState.requestId != null) 'requestId': _overlayState.requestId,
+      'requestId': ?_overlayState.requestId,
+      'payload': ?payload,
     });
   }
+
+  Future<void> _sendSelectedRegion(Rect region) => _sendAction(
+    'regionSelected',
+    payload: <String, dynamic>{
+      'rect': <double>[region.left, region.top, region.right, region.bottom],
+    },
+  );
 
   void _resetMenu() {
     _menuGeneration++;
@@ -408,7 +424,20 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
 
   Future<void> _onMenuAction(String type) async {
     await _closeMenu();
-    await _sendAction(type);
+    switch (type) {
+      case 'modeFullScreen':
+        await _sendAction(
+          'setTranslationMode',
+          payload: const <String, dynamic>{'mode': 'fullScreen'},
+        );
+      case 'modeRegion':
+        await _sendAction(
+          'setTranslationMode',
+          payload: const <String, dynamic>{'mode': 'region'},
+        );
+      default:
+        await _sendAction(type);
+    }
   }
 
   Future<void> _setWindowMode(bool fullScreen, {bool force = false}) {
@@ -491,7 +520,10 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
   }
 
   bool _needsFullScreen(String state) {
-    return state == 'translating' || state == 'result' || state == 'error';
+    return state == 'selecting' ||
+        state == 'translating' ||
+        state == 'result' ||
+        state == 'error';
   }
 
   void _clearOverlay() {
@@ -540,7 +572,8 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
         frameImage: _frameImage,
         menuOpen: _menuOpen,
         menuAnchor: _menuAnchor,
-        onAction: _sendAction,
+        onAction: (type) => _sendAction(type),
+        onSelectRegion: _sendSelectedRegion,
         onOpenMenu: _openMenu,
         onCloseMenu: _closeMenu,
         onMenuAction: _onMenuAction,
@@ -556,6 +589,7 @@ class _OverlaySurface extends StatelessWidget {
     required this.menuOpen,
     required this.menuAnchor,
     required this.onAction,
+    required this.onSelectRegion,
     required this.onOpenMenu,
     required this.onCloseMenu,
     required this.onMenuAction,
@@ -566,6 +600,7 @@ class _OverlaySurface extends StatelessWidget {
   final bool menuOpen;
   final OverlayPosition? menuAnchor;
   final Future<void> Function(String type) onAction;
+  final Future<void> Function(Rect region) onSelectRegion;
   final Future<void> Function() onOpenMenu;
   final Future<void> Function() onCloseMenu;
   final Future<void> Function(String type) onMenuAction;
@@ -576,6 +611,14 @@ class _OverlaySurface extends StatelessWidget {
       return const Material(
         color: Colors.transparent,
         child: SizedBox.expand(),
+      );
+    }
+    if (state.state == 'selecting') {
+      return _RegionSelectionSurface(
+        state: state,
+        frameImage: frameImage,
+        onAction: onAction,
+        onSelectRegion: onSelectRegion,
       );
     }
     if (state.state == 'capturing' ||
@@ -606,6 +649,208 @@ class _OverlaySurface extends StatelessWidget {
       state: state,
       onAction: onAction,
       onOpenMenu: onOpenMenu,
+    );
+  }
+}
+
+class _RegionSelectionSurface extends StatefulWidget {
+  const _RegionSelectionSurface({
+    required this.state,
+    required this.frameImage,
+    required this.onAction,
+    required this.onSelectRegion,
+  });
+
+  final _OverlayState state;
+  final MemoryImage? frameImage;
+  final Future<void> Function(String type) onAction;
+  final Future<void> Function(Rect region) onSelectRegion;
+
+  @override
+  State<_RegionSelectionSurface> createState() =>
+      _RegionSelectionSurfaceState();
+}
+
+class _RegionSelectionSurfaceState extends State<_RegionSelectionSurface> {
+  Offset? _dragOrigin;
+  Rect? _selection;
+  bool _selectionValid = false;
+
+  Rect _normalizedRect(Offset first, Offset second, Rect imageRect) {
+    final startX = ((first.dx - imageRect.left) / imageRect.width).clamp(
+      0.0,
+      1.0,
+    );
+    final startY = ((first.dy - imageRect.top) / imageRect.height).clamp(
+      0.0,
+      1.0,
+    );
+    final endX = ((second.dx - imageRect.left) / imageRect.width).clamp(
+      0.0,
+      1.0,
+    );
+    final endY = ((second.dy - imageRect.top) / imageRect.height).clamp(
+      0.0,
+      1.0,
+    );
+    return Rect.fromLTRB(
+      startX < endX ? startX : endX,
+      startY < endY ? startY : endY,
+      startX > endX ? startX : endX,
+      startY > endY ? startY : endY,
+    );
+  }
+
+  Rect _displayRect(Rect normalized, Rect imageRect) {
+    return Rect.fromLTRB(
+      imageRect.left + normalized.left * imageRect.width,
+      imageRect.top + normalized.top * imageRect.height,
+      imageRect.left + normalized.right * imageRect.width,
+      imageRect.top + normalized.bottom * imageRect.height,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final imageRatio =
+        widget.state.frameWidth > 0 && widget.state.frameHeight > 0
+        ? widget.state.frameWidth / widget.state.frameHeight
+        : 1.0;
+    return Material(
+      color: Colors.black,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final imageRect = containedImageRect(
+                    viewport: Size(constraints.maxWidth, constraints.maxHeight),
+                    imageAspectRatio: imageRatio,
+                  );
+                  final displaySelection = _selection == null
+                      ? null
+                      : _displayRect(_selection!, imageRect);
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (widget.frameImage != null)
+                        Image(
+                          image: widget.frameImage!,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      if (displaySelection != null)
+                        Positioned.fromRect(
+                          rect: displaySelection,
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.lightBlueAccent.withValues(
+                                  alpha: 0.2,
+                                ),
+                                border: Border.all(
+                                  color: Colors.lightBlueAccent,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Positioned.fill(
+                        child: GestureDetector(
+                          key: const ValueKey('region-selection-canvas'),
+                          behavior: HitTestBehavior.opaque,
+                          onPanStart: (details) {
+                            if (!imageRect.contains(details.localPosition)) {
+                              setState(() {
+                                _dragOrigin = null;
+                                _selection = null;
+                                _selectionValid = false;
+                              });
+                              return;
+                            }
+                            setState(() {
+                              _dragOrigin = details.localPosition;
+                              _selection = null;
+                              _selectionValid = false;
+                            });
+                          },
+                          onPanUpdate: (details) {
+                            final origin = _dragOrigin;
+                            if (origin == null) return;
+                            final selection = _normalizedRect(
+                              origin,
+                              details.localPosition,
+                              imageRect,
+                            );
+                            setState(() {
+                              _selection = selection;
+                              _selectionValid =
+                                  selection.width * imageRect.width >= 8 &&
+                                  selection.height * imageRect.height >= 8;
+                            });
+                          },
+                          onPanEnd: (_) => setState(() => _dragOrigin = null),
+                        ),
+                      ),
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        right: 12,
+                        child: Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.68),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                l10n.translationSelectRegionHint,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: SizedBox(
+                height: 64,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => unawaited(widget.onAction('cancel')),
+                      icon: const Icon(Icons.close),
+                      label: Text(l10n.cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: _selectionValid
+                          ? () => unawaited(widget.onSelectRegion(_selection!))
+                          : null,
+                      icon: const Icon(Icons.translate),
+                      label: Text(l10n.translationConfirmRegion),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -735,6 +980,26 @@ class _BubbleMenuSurface extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _BubbleMenuItem(
+                      icon: Icons.fullscreen,
+                      label: l10n.translationModeFullScreen,
+                      selected: state.translationMode == 'fullScreen',
+                      onTap: () => unawaited(onAction('modeFullScreen')),
+                    ),
+                    _BubbleMenuItem(
+                      icon: Icons.crop_free,
+                      label: l10n.translationModeRegion,
+                      selected: state.translationMode == 'region',
+                      onTap: () => unawaited(onAction('modeRegion')),
+                    ),
+                    if (state.translationMode == 'region' &&
+                        state.hasSelectedRegion)
+                      _BubbleMenuItem(
+                        icon: Icons.crop,
+                        label: l10n.translationModeRegionSelected,
+                        onTap: () => unawaited(onAction('reselectRegion')),
+                      ),
+                    const Divider(height: 1),
+                    _BubbleMenuItem(
                       icon: Icons.settings,
                       label: l10n.settings,
                       onTap: () => unawaited(onAction('openSettings')),
@@ -761,11 +1026,13 @@ class _BubbleMenuItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.selected = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -779,6 +1046,10 @@ class _BubbleMenuItem extends StatelessWidget {
             Icon(icon, size: 20),
             const SizedBox(width: 12),
             Text(label),
+            if (selected) ...[
+              const SizedBox(width: 16),
+              const Icon(Icons.check, size: 18),
+            ],
           ],
         ),
       ),
@@ -956,6 +1227,8 @@ class _OverlayState {
     this.requestId,
     this.state = 'stopped',
     this.locale = 'en',
+    this.translationMode = 'fullScreen',
+    this.hasSelectedRegion = false,
     this.errorCode,
     this.errorMessage,
     this.frameBytes,
@@ -971,6 +1244,8 @@ class _OverlayState {
   final String? requestId;
   final String state;
   final String locale;
+  final String translationMode;
+  final bool hasSelectedRegion;
   final String? errorCode;
   final String? errorMessage;
   final Uint8List? frameBytes;
@@ -986,6 +1261,8 @@ class _OverlayState {
     String? requestId,
     String? state,
     String? locale,
+    String? translationMode,
+    bool? hasSelectedRegion,
     String? errorCode,
     String? errorMessage,
     Uint8List? frameBytes,
@@ -1006,6 +1283,8 @@ class _OverlayState {
       requestId: clearRequest ? null : requestId ?? this.requestId,
       state: state ?? this.state,
       locale: locale ?? this.locale,
+      translationMode: translationMode ?? this.translationMode,
+      hasSelectedRegion: hasSelectedRegion ?? this.hasSelectedRegion,
       errorCode: clearError ? errorCode : errorCode ?? this.errorCode,
       errorMessage: clearError
           ? errorMessage

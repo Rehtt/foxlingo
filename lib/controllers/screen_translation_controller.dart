@@ -11,6 +11,7 @@ import '../models/translation_models.dart';
 import '../platform/overlay_controller.dart';
 import '../platform/screen_capture_channel.dart';
 import '../platform/translation_bridge.dart';
+import '../utils/image_region_crop.dart';
 import '../utils/translation_settings.dart';
 
 enum ScreenTranslationState {
@@ -18,6 +19,7 @@ enum ScreenTranslationState {
   starting,
   ready,
   capturing,
+  selecting,
   translating,
   result,
   error,
@@ -90,6 +92,7 @@ class ScreenTranslationController extends ChangeNotifier {
   bool _stopping = false;
   Completer<void>? _stopCompletion;
   bool _captureSessionUnavailable = false;
+  Rect? _selectedRegion;
   bool _disposed = false;
   final StreamController<void> _settingsRequests =
       StreamController<void>.broadcast();
@@ -104,6 +107,7 @@ class ScreenTranslationController extends ChangeNotifier {
   bool get isBusy => switch (_state) {
     ScreenTranslationState.starting ||
     ScreenTranslationState.capturing ||
+    ScreenTranslationState.selecting ||
     ScreenTranslationState.translating => true,
     _ => false,
   };
@@ -156,6 +160,7 @@ class ScreenTranslationController extends ChangeNotifier {
     _sessionAppLocale = appLocale;
     _sessionDeviceLocale = deviceLocale;
     _lastGeometryVersion = 0;
+    _selectedRegion = null;
     _captureSessionUnavailable = false;
     _captureSessionStarted = false;
     _overlayReady = Completer<void>();
@@ -263,7 +268,7 @@ class ScreenTranslationController extends ChangeNotifier {
     }
   }
 
-  Future<void> translate() async {
+  Future<void> translate({bool forceRegionSelection = false}) async {
     if (_state != ScreenTranslationState.ready || _activeRequest != null) {
       return;
     }
@@ -283,6 +288,10 @@ class ScreenTranslationController extends ChangeNotifier {
       geometryVersionAtStart: _lastGeometryVersion,
     );
     _activeRequest = request;
+    final mode = request.settings.screenTranslationMode;
+    final needsRegionSelection =
+        mode == ScreenTranslationMode.region &&
+        (forceRegionSelection || _selectedRegion == null);
     _currentTaskRequestId = request.requestId;
     _currentFrame = null;
     _currentResult = null;
@@ -329,15 +338,41 @@ class ScreenTranslationController extends ChangeNotifier {
       _currentFrame = frame;
       request.frameGeometryVersion = frame.geometryVersion;
       _lastGeometryVersion = frame.geometryVersion;
+
+      Rect? selectedRegion = mode == ScreenTranslationMode.region
+          ? _selectedRegion
+          : null;
+      if (needsRegionSelection) {
+        _setState(ScreenTranslationState.selecting);
+        await _sendSnapshot();
+        selectedRegion = await Future.any<Rect>([
+          request.selectedRegion.future,
+          request.abort.future.then<Rect>((_) {
+            throw const _StaleTranslationRequest();
+          }),
+        ]);
+        _throwIfStale(request);
+        _selectedRegion = selectedRegion;
+      }
+
       _setState(ScreenTranslationState.translating);
       await _sendSnapshot();
+
+      var translationImage = frame.bytes;
+      Rect? cropRegion;
+      if (selectedRegion != null) {
+        final crop = await cropImageToRegion(frame.bytes, selectedRegion);
+        _throwIfStale(request);
+        translationImage = crop.bytes;
+        cropRegion = crop.normalizedRect;
+      }
 
       final service = _service ??= _serviceFactory();
       late final ImageTranslationResult result;
       try {
         result = await service
             .translate(
-              imageBytes: frame.bytes,
+              imageBytes: translationImage,
               settings: request.settings,
               appLocale: request.appLocale,
               deviceLocale: request.deviceLocale,
@@ -371,14 +406,23 @@ class ScreenTranslationController extends ChangeNotifier {
       }
       _throwIfStale(request);
 
-      _currentResult = result;
+      _currentResult = cropRegion == null
+          ? result
+          : mapImageTranslationResultToRegion(
+              result: result,
+              normalizedRegion: cropRegion,
+              fullImageSize: Size(
+                frame.width.toDouble(),
+                frame.height.toDouble(),
+              ),
+            );
       _setState(ScreenTranslationState.result);
       await _send(
         _message(
           type: 'result',
           sessionId: sessionId,
           requestId: request.requestId,
-          payload: <String, dynamic>{'result': result.toJson()},
+          payload: <String, dynamic>{'result': _currentResult!.toJson()},
         ),
       );
     } on Object catch (error) {
@@ -408,6 +452,7 @@ class ScreenTranslationController extends ChangeNotifier {
     final request = _activeRequest;
     if (request == null ||
         (_state != ScreenTranslationState.capturing &&
+            _state != ScreenTranslationState.selecting &&
             _state != ScreenTranslationState.translating)) {
       return;
     }
@@ -419,6 +464,7 @@ class ScreenTranslationController extends ChangeNotifier {
     if (_sessionId != request.sessionId ||
         _currentTaskRequestId != request.requestId ||
         (_state != ScreenTranslationState.capturing &&
+            _state != ScreenTranslationState.selecting &&
             _state != ScreenTranslationState.translating)) {
       return;
     }
@@ -477,6 +523,7 @@ class ScreenTranslationController extends ChangeNotifier {
     _sessionDeviceLocale = null;
     _overlayReady = null;
     _lastGeometryVersion = 0;
+    _selectedRegion = null;
     _captureSessionStarted = false;
     _captureSessionUnavailable = false;
     _clearCurrentTask();
@@ -625,6 +672,32 @@ class ScreenTranslationController extends ChangeNotifier {
         unawaited(stop());
       case 'openSettings':
         unawaited(_handleOpenSettings());
+      case 'setTranslationMode':
+        final payload = message['payload'];
+        final mode = payload is Map && payload['mode'] == 'region'
+            ? ScreenTranslationMode.region
+            : ScreenTranslationMode.fullScreen;
+        unawaited(_setTranslationMode(mode));
+      case 'reselectRegion':
+        unawaited(_reselectRegion());
+      case 'regionSelected':
+        final request = _activeRequest;
+        final payload = message['payload'];
+        final selection = payload is Map
+            ? _parseNormalizedRegion(payload['rect'])
+            : null;
+        final frame = _currentFrame;
+        if (request != null &&
+            request.sessionId == _sessionId &&
+            request.requestId == message['requestId'] &&
+            _state == ScreenTranslationState.selecting &&
+            selection != null &&
+            frame != null &&
+            selection.width * frame.width >= 8 &&
+            selection.height * frame.height >= 8 &&
+            !request.selectedRegion.isCompleted) {
+          request.selectedRegion.complete(selection);
+        }
       case 'capturePrepared':
         final requestId = message['requestId'];
         if (requestId == _activeRequest?.requestId) {
@@ -639,6 +712,11 @@ class ScreenTranslationController extends ChangeNotifier {
   void _onCaptureEvent(ScreenCaptureEvent event) {
     final previousGeometryVersion = _lastGeometryVersion;
     _lastGeometryVersion = event.geometryVersion;
+    if (event.geometryVersion != 0 &&
+        previousGeometryVersion != 0 &&
+        event.geometryVersion != previousGeometryVersion) {
+      _selectedRegion = null;
+    }
     if (event.state == ScreenCaptureSessionState.stopped &&
         _state == ScreenTranslationState.starting &&
         !_captureSessionStarted) {
@@ -691,6 +769,7 @@ class ScreenTranslationController extends ChangeNotifier {
     if (_sessionId != request.sessionId ||
         _currentTaskRequestId != request.requestId ||
         (_state != ScreenTranslationState.capturing &&
+            _state != ScreenTranslationState.selecting &&
             _state != ScreenTranslationState.translating)) {
       return;
     }
@@ -709,6 +788,61 @@ class ScreenTranslationController extends ChangeNotifier {
     } on Object {
       // Bringing the Activity forward can fail in tests or after teardown.
     }
+  }
+
+  Future<void> _setTranslationMode(ScreenTranslationMode mode) async {
+    if (_state != ScreenTranslationState.ready || _sessionId == null) {
+      return;
+    }
+    try {
+      await _settings.setScreenTranslationMode(mode);
+    } on Object catch (error) {
+      _setError(_controllerError(error));
+    }
+    await _sendSnapshot();
+  }
+
+  Future<void> _reselectRegion() async {
+    if (_state != ScreenTranslationState.ready || _sessionId == null) {
+      return;
+    }
+    try {
+      await _settings.setScreenTranslationMode(ScreenTranslationMode.region);
+    } on Object catch (error) {
+      _setError(_controllerError(error));
+      await _sendSnapshot();
+      return;
+    }
+    await translate(forceRegionSelection: true);
+  }
+
+  Rect? _parseNormalizedRegion(Object? value) {
+    if (value is! List ||
+        value.length != 4 ||
+        value.any((item) => item is! num)) {
+      return null;
+    }
+    final coordinates = value
+        .cast<num>()
+        .map((item) => item.toDouble())
+        .toList();
+    if (coordinates.any((coordinate) => !coordinate.isFinite)) {
+      return null;
+    }
+    final region = Rect.fromLTRB(
+      coordinates[0],
+      coordinates[1],
+      coordinates[2],
+      coordinates[3],
+    );
+    if (region.left < 0 ||
+        region.top < 0 ||
+        region.right > 1 ||
+        region.bottom > 1 ||
+        region.isEmpty) {
+      return null;
+    }
+    return region;
   }
 
   Future<void> _handleExternalStop() => stop();
@@ -849,6 +983,10 @@ class ScreenTranslationController extends ChangeNotifier {
           'errorMessage': _errorMessage,
           'hasFrame': _currentFrame != null,
           'hasResult': _currentResult != null,
+          'frameWidth': _currentFrame?.width ?? 0,
+          'frameHeight': _currentFrame?.height ?? 0,
+          'translationMode': _settings.screenTranslationMode.name,
+          'hasSelectedRegion': _selectedRegion != null,
         },
       ),
     );
@@ -947,6 +1085,7 @@ class _TranslationRequest {
   final TranslationSettings settings;
   final Completer<void> abort;
   final Completer<void> capturePrepared = Completer<void>();
+  final Completer<Rect> selectedRegion = Completer<Rect>();
   final Locale? appLocale;
   final Locale deviceLocale;
   final int geometryVersionAtStart;

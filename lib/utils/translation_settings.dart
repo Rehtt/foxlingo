@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/ocr_script.dart';
 import '../models/translation_models.dart';
 
+enum ScreenTranslationMode { fullScreen, region }
+
 class TranslationSettings extends ChangeNotifier {
   TranslationSettings({FlutterSecureStorage? secureStorage})
     : _secureStorage = secureStorage ?? const FlutterSecureStorage();
@@ -24,7 +26,8 @@ class TranslationSettings extends ChangeNotifier {
       _imageLlmApiKey = source._imageLlmApiKey,
       _imageLlmModel = source._imageLlmModel,
       _reasoningEffort = source._reasoningEffort,
-      _ocrScript = source._ocrScript;
+      _ocrScript = source._ocrScript,
+      _screenTranslationMode = source._screenTranslationMode;
 
   /// Copies the current values without reading or writing secure storage.
   /// A translation request owns this snapshot for its entire lifetime, so
@@ -54,6 +57,8 @@ class TranslationSettings extends ChangeNotifier {
   static const String _imageLlmModelKey = 'translation.imageLlmModel';
   static const String _reasoningEffortKey = 'translation.reasoningEffort';
   static const String _ocrScriptKey = 'translation.ocrScript';
+  static const String _screenTranslationModeKey =
+      'translation.screenTranslationMode';
 
   final FlutterSecureStorage _secureStorage;
 
@@ -72,6 +77,8 @@ class TranslationSettings extends ChangeNotifier {
   String _imageLlmModel = '';
   String _reasoningEffort = '';
   OcrScript _ocrScript = OcrScript.latin;
+  ScreenTranslationMode _screenTranslationMode =
+      ScreenTranslationMode.fullScreen;
 
   TranslationProvider get provider => _provider;
   String get apiBaseUrl => _apiBaseUrl;
@@ -84,6 +91,7 @@ class TranslationSettings extends ChangeNotifier {
   String get microsoftRegion => _microsoftRegion;
   ImageTranslationMethod get imageMethod => _imageMethod;
   OcrScript get ocrScript => _ocrScript;
+  ScreenTranslationMode get screenTranslationMode => _screenTranslationMode;
 
   /// Raw stored values; empty means "fall back to the text LLM settings".
   String get imageLlmApiBaseUrl => _imageLlmApiBaseUrl;
@@ -124,6 +132,7 @@ class TranslationSettings extends ChangeNotifier {
       'imageLlmModel': _imageLlmModel,
       'reasoningEffort': _reasoningEffort,
       'ocrScript': _ocrScript.name,
+      'screenTranslationMode': _screenTranslationMode.name,
     };
   }
 
@@ -151,6 +160,9 @@ class TranslationSettings extends ChangeNotifier {
     _imageLlmModel = (json['imageLlmModel'] as String? ?? '').trim();
     _reasoningEffort = (json['reasoningEffort'] as String? ?? '').trim();
     _ocrScript = _normalizeOcrScript(json['ocrScript']);
+    _screenTranslationMode = _normalizeScreenTranslationMode(
+      json['screenTranslationMode'],
+    );
 
     await _persistAll();
     notifyListeners();
@@ -184,6 +196,9 @@ class TranslationSettings extends ChangeNotifier {
         await _secureStorage.read(key: _reasoningEffortKey) ?? '';
     _ocrScript = _normalizeOcrScript(
       await _secureStorage.read(key: _ocrScriptKey),
+    );
+    _screenTranslationMode = _normalizeScreenTranslationMode(
+      await _secureStorage.read(key: _screenTranslationModeKey),
     );
     notifyListeners();
   }
@@ -229,6 +244,18 @@ class TranslationSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setScreenTranslationMode(ScreenTranslationMode mode) async {
+    if (_screenTranslationMode == mode) {
+      return;
+    }
+    await _secureStorage.write(
+      key: _screenTranslationModeKey,
+      value: mode.name,
+    );
+    _screenTranslationMode = mode;
+    notifyListeners();
+  }
+
   Future<void> _persistAll() async {
     await _secureStorage.write(key: _providerKey, value: _provider.name);
     await _secureStorage.write(key: _apiBaseUrlKey, value: _apiBaseUrl);
@@ -257,6 +284,10 @@ class TranslationSettings extends ChangeNotifier {
       value: _reasoningEffort,
     );
     await _secureStorage.write(key: _ocrScriptKey, value: _ocrScript.name);
+    await _secureStorage.write(
+      key: _screenTranslationModeKey,
+      value: _screenTranslationMode.name,
+    );
   }
 
   String resolveTargetLanguageName({
@@ -419,6 +450,13 @@ class TranslationSettings extends ChangeNotifier {
       'japanese' => OcrScript.japanese,
       'korean' => OcrScript.korean,
       _ => OcrScript.latin,
+    };
+  }
+
+  static ScreenTranslationMode _normalizeScreenTranslationMode(Object? value) {
+    return switch (value) {
+      'region' => ScreenTranslationMode.region,
+      _ => ScreenTranslationMode.fullScreen,
     };
   }
 }

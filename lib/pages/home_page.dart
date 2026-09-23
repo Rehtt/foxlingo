@@ -257,6 +257,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ScreenTranslationState.starting => l10n.translationStarting,
       ScreenTranslationState.ready => l10n.translationReady,
       ScreenTranslationState.capturing => l10n.translationCapturing,
+      ScreenTranslationState.selecting => l10n.translationSelectingRegion,
       ScreenTranslationState.translating => l10n.translationInProgress,
       ScreenTranslationState.result => l10n.translationResultReady,
       ScreenTranslationState.error => l10n.translationSessionError,

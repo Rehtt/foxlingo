@@ -272,6 +272,42 @@ abstract class AppLocalizations {
   /// **'Capturing the current screen...'**
   String get translationCapturing;
 
+  /// No description provided for @translationModeFullScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole screen translation'**
+  String get translationModeFullScreen;
+
+  /// No description provided for @translationModeRegion.
+  ///
+  /// In en, this message translates to:
+  /// **'Area translation'**
+  String get translationModeRegion;
+
+  /// No description provided for @translationModeRegionSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Reselect area'**
+  String get translationModeRegionSelected;
+
+  /// No description provided for @translationSelectRegionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag on the screenshot to select an area.'**
+  String get translationSelectRegionHint;
+
+  /// No description provided for @translationSelectingRegion.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for area selection...'**
+  String get translationSelectingRegion;
+
+  /// No description provided for @translationConfirmRegion.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate'**
+  String get translationConfirmRegion;
+
   /// No description provided for @translationResultReady.
   ///
   /// In en, this message translates to:

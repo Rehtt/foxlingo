@@ -369,6 +369,94 @@ void main() {
     await bridge.close();
   });
 
+  testWidgets(
+    'bubble menu changes translation mode and offers area reselection',
+    (tester) async {
+      final bridge = _TestBridge();
+      _stubOverlayWindow(tester, windowCalls: <MethodCall>[]);
+      await _pumpReadyBubble(tester, bridge);
+
+      await tester.longPress(find.byIcon(Icons.translate));
+      await tester.pumpAndSettle();
+      expect(find.text('Whole screen translation'), findsOneWidget);
+      expect(find.text('Area translation'), findsOneWidget);
+      await tester.tap(find.text('Area translation'));
+      await tester.pumpAndSettle();
+      expect(bridge.sent.last['type'], 'setTranslationMode');
+      expect((bridge.sent.last['payload'] as Map)['mode'], 'region');
+
+      bridge.emit(const {
+        'version': 1,
+        'type': 'state',
+        'sessionId': 's1',
+        'payload': {
+          'state': 'ready',
+          'locale': 'en',
+          'translationMode': 'region',
+          'hasSelectedRegion': true,
+        },
+      });
+      await tester.pumpAndSettle();
+      await tester.longPress(find.byIcon(Icons.translate));
+      await tester.pumpAndSettle();
+      expect(find.text('Reselect area'), findsOneWidget);
+      await tester.tap(find.text('Reselect area'));
+      await tester.pumpAndSettle();
+      expect(bridge.sent.last['type'], 'reselectRegion');
+      await bridge.close();
+    },
+  );
+
+  testWidgets('area selection sends normalized bounds for the captured frame', (
+    tester,
+  ) async {
+    final bridge = _TestBridge();
+    _stubOverlayWindow(tester, windowCalls: <MethodCall>[]);
+    await tester.pumpWidget(TranslationOverlayApp(bridge: bridge));
+    bridge.emit(const {'version': 1, 'type': 'handshake', 'sessionId': 's1'});
+    await tester.pump();
+    bridge.emit(const {
+      'version': 1,
+      'type': 'state',
+      'sessionId': 's1',
+      'requestId': 'r1',
+      'payload': {
+        'state': 'selecting',
+        'locale': 'en',
+        'translationMode': 'region',
+        'hasSelectedRegion': false,
+        'frameWidth': 100,
+        'frameHeight': 50,
+      },
+    });
+    await tester.pump();
+
+    final translateButton = find.widgetWithText(TextButton, 'Translate');
+    expect(tester.widget<TextButton>(translateButton).onPressed, isNull);
+    final canvas = tester.getRect(
+      find.byKey(const ValueKey('region-selection-canvas')),
+    );
+    await tester.dragFrom(canvas.center, const Offset(120, 80));
+    await tester.pump();
+    expect(tester.widget<TextButton>(translateButton).onPressed, isNotNull);
+    await tester.tap(translateButton);
+    await tester.pump();
+
+    final message = bridge.sent.last;
+    expect(message['type'], 'regionSelected');
+    expect(message['requestId'], 'r1');
+    final payload = message['payload'] as Map;
+    final rect = (payload['rect'] as List).cast<num>();
+    expect(rect, hasLength(4));
+    expect(rect[0], greaterThanOrEqualTo(0));
+    expect(rect[1], greaterThanOrEqualTo(0));
+    expect(rect[2], lessThanOrEqualTo(1));
+    expect(rect[3], lessThanOrEqualTo(1));
+    expect(rect[2], greaterThan(rect[0]));
+    expect(rect[3], greaterThan(rect[1]));
+    await bridge.close();
+  });
+
   testWidgets('choosing Settings sends openSettings and restores the bubble', (
     tester,
   ) async {

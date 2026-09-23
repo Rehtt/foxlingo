@@ -10,6 +10,26 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
+  test(
+    'screen translation mode defaults to full screen and persists',
+    () async {
+      final settings = TranslationSettings();
+      await settings.load();
+      expect(settings.screenTranslationMode, ScreenTranslationMode.fullScreen);
+
+      await settings.setScreenTranslationMode(ScreenTranslationMode.region);
+      expect(
+        settings.snapshot().screenTranslationMode,
+        ScreenTranslationMode.region,
+      );
+
+      final restored = TranslationSettings();
+      await restored.load();
+      expect(restored.screenTranslationMode, ScreenTranslationMode.region);
+      expect(restored.toBackupJson()['screenTranslationMode'], 'region');
+    },
+  );
+
   test('isConfigured reflects selected provider credentials', () async {
     final settings = TranslationSettings();
 

@@ -103,6 +103,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translationCapturing => 'Capturing the current screen...';
 
   @override
+  String get translationModeFullScreen => 'Whole screen translation';
+
+  @override
+  String get translationModeRegion => 'Area translation';
+
+  @override
+  String get translationModeRegionSelected => 'Reselect area';
+
+  @override
+  String get translationSelectRegionHint =>
+      'Drag on the screenshot to select an area.';
+
+  @override
+  String get translationSelectingRegion => 'Waiting for area selection...';
+
+  @override
+  String get translationConfirmRegion => 'Translate';
+
+  @override
   String get translationResultReady =>
       'Translation result is shown in the overlay.';
 

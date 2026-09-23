@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -20,6 +21,225 @@ void main() {
   setUp(() {
     FlutterSecureStorage.setMockInitialValues({});
   });
+
+  test(
+    'region mode waits for a selection, crops input and maps the result',
+    () async {
+      final settings = await _configuredSettings();
+      await settings.setScreenTranslationMode(ScreenTranslationMode.region);
+      final capture = _FakeCapture()..frameBytes = await _makePng(100, 50);
+      final overlay = _FakeOverlay();
+      final service = _ImmediateService(
+        const ImageTranslationResult(
+          imageSize: Size(50, 30),
+          regions: [
+            ImageTextRegion(
+              normalizedRect: Rect.fromLTRB(0.2, 0.1, 0.6, 0.5),
+              sourceText: 'Hello',
+              translatedText: '你好',
+            ),
+          ],
+        ),
+      );
+      final controller = _controller(
+        settings,
+        capture,
+        overlay,
+        serviceFactory: () => service,
+      );
+      addTearDown(controller.dispose);
+      await controller.start();
+
+      final selecting = Completer<void>();
+      void listenForSelection() {
+        if (controller.state == ScreenTranslationState.selecting &&
+            !selecting.isCompleted) {
+          selecting.complete();
+        }
+      }
+
+      controller.addListener(listenForSelection);
+      final translation = controller.translate();
+      await selecting.future.timeout(const Duration(seconds: 1));
+      final request = overlay.sent.lastWhere(
+        (message) => message['type'] == 'prepareCapture',
+      );
+      overlay.emit({
+        'version': 1,
+        'type': 'regionSelected',
+        'sessionId': request['sessionId'],
+        'requestId': request['requestId'],
+        'payload': {
+          'rect': [0.25, 0.2, 0.75, 0.8],
+        },
+      });
+      await translation;
+      controller.removeListener(listenForSelection);
+
+      expect(controller.state, ScreenTranslationState.result);
+      expect(service.translateCalls, 1);
+      final codec = await ui.instantiateImageCodec(service.lastImageBytes!);
+      final cropped = (await codec.getNextFrame()).image;
+      expect(cropped.width, 50);
+      expect(cropped.height, 30);
+      cropped.dispose();
+      codec.dispose();
+
+      final resultMessage = overlay.sent.lastWhere(
+        (message) => message['type'] == 'result',
+      );
+      final payload = Map<String, dynamic>.from(
+        resultMessage['payload'] as Map,
+      );
+      final result = ImageTranslationResult.fromJson(
+        Map<String, dynamic>.from(payload['result'] as Map),
+      );
+      expect(result.imageSize, const Size(100, 50));
+      expect(
+        result.regions.single.normalizedRect,
+        const Rect.fromLTRB(0.35, 0.26, 0.55, 0.5),
+      );
+
+      await controller.dismissResult();
+      await controller.translate();
+      expect(service.translateCalls, 2);
+      expect(controller.state, ScreenTranslationState.result);
+      await controller.dismissResult();
+
+      final reselecting = Completer<void>();
+      final reselectCancelled = Completer<void>();
+      var sawReselecting = false;
+      void listenForReselection() {
+        if (controller.state == ScreenTranslationState.selecting) {
+          sawReselecting = true;
+          if (!reselecting.isCompleted) reselecting.complete();
+        } else if (sawReselecting &&
+            controller.state == ScreenTranslationState.ready &&
+            !reselectCancelled.isCompleted) {
+          reselectCancelled.complete();
+        }
+      }
+
+      controller.addListener(listenForReselection);
+      overlay.emit(const {
+        'version': 1,
+        'type': 'reselectRegion',
+        'sessionId': 's1',
+      });
+      await reselecting.future.timeout(const Duration(seconds: 1));
+      final reselectRequest = overlay.sent.lastWhere(
+        (message) => message['type'] == 'prepareCapture',
+      );
+      overlay.emit({
+        'version': 1,
+        'type': 'cancel',
+        'sessionId': 's1',
+        'requestId': reselectRequest['requestId'],
+      });
+      await reselectCancelled.future.timeout(const Duration(seconds: 1));
+      controller.removeListener(listenForReselection);
+
+      await controller.translate();
+      expect(service.translateCalls, 3);
+      expect(controller.state, ScreenTranslationState.result);
+      await controller.dismissResult();
+      capture.emitEvent(
+        const ScreenCaptureEvent(
+          state: ScreenCaptureSessionState.ready,
+          width: 100,
+          height: 50,
+          geometryVersion: 2,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final readySnapshot = overlay.sent.lastWhere(
+        (message) =>
+            message['type'] == 'state' &&
+            (message['payload'] as Map)['state'] == 'ready',
+      );
+      expect((readySnapshot['payload'] as Map)['hasSelectedRegion'], isFalse);
+    },
+  );
+
+  test(
+    'overlay mode changes update and persist the controller setting',
+    () async {
+      final settings = await _configuredSettings();
+      final overlay = _FakeOverlay();
+      final controller = _controller(settings, _FakeCapture(), overlay);
+      addTearDown(controller.dispose);
+      await controller.start();
+
+      final changed = Completer<void>();
+      void onSettingsChanged() {
+        if (settings.screenTranslationMode == ScreenTranslationMode.region &&
+            !changed.isCompleted) {
+          changed.complete();
+        }
+      }
+
+      settings.addListener(onSettingsChanged);
+      overlay.emit(const {
+        'version': 1,
+        'type': 'setTranslationMode',
+        'sessionId': 's1',
+        'payload': {'mode': 'region'},
+      });
+      await changed.future.timeout(const Duration(seconds: 1));
+      settings.removeListener(onSettingsChanged);
+      expect(settings.screenTranslationMode, ScreenTranslationMode.region);
+      final restored = TranslationSettings();
+      await restored.load();
+      expect(restored.screenTranslationMode, ScreenTranslationMode.region);
+    },
+  );
+
+  test(
+    'canceling area selection returns to ready without calling translator',
+    () async {
+      final settings = await _configuredSettings();
+      await settings.setScreenTranslationMode(ScreenTranslationMode.region);
+      final capture = _FakeCapture()..frameBytes = await _makePng(100, 50);
+      final overlay = _FakeOverlay();
+      final service = _ImmediateService(
+        const ImageTranslationResult(imageSize: Size(100, 50), regions: []),
+      );
+      final controller = _controller(
+        settings,
+        capture,
+        overlay,
+        serviceFactory: () => service,
+      );
+      addTearDown(controller.dispose);
+      await controller.start();
+
+      final selecting = Completer<void>();
+      void listenForSelection() {
+        if (controller.state == ScreenTranslationState.selecting &&
+            !selecting.isCompleted) {
+          selecting.complete();
+        }
+      }
+
+      controller.addListener(listenForSelection);
+      final translation = controller.translate();
+      await selecting.future.timeout(const Duration(seconds: 1));
+      final request = overlay.sent.lastWhere(
+        (message) => message['type'] == 'prepareCapture',
+      );
+      overlay.emit({
+        'version': 1,
+        'type': 'cancel',
+        'sessionId': request['sessionId'],
+        'requestId': request['requestId'],
+      });
+      await translation;
+      controller.removeListener(listenForSelection);
+
+      expect(controller.state, ScreenTranslationState.ready);
+      expect(service.translateCalls, 0);
+    },
+  );
 
   for (final external in [false, true]) {
     test(
@@ -725,6 +945,21 @@ Future<TranslationSettings> _configuredSettings() async {
   return settings;
 }
 
+Future<Uint8List> _makePng(int width, int height) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    ui.Paint()..color = Colors.white,
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width, height);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  picture.dispose();
+  return data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+}
+
 class _FakeCapture implements ScreenCaptureGateway {
   final StreamController<ScreenCaptureEvent> _events =
       StreamController<ScreenCaptureEvent>.broadcast();
@@ -732,6 +967,7 @@ class _FakeCapture implements ScreenCaptureGateway {
   int startCalls = 0;
   int stopCalls = 0;
   int captureCalls = 0;
+  Uint8List? frameBytes;
   Future<void>? cancelResult;
   Future<ScreenCapturePermissionResult>? permissionResult;
   Future<ScreenCaptureSessionInfo>? sessionStateResult;
@@ -775,7 +1011,7 @@ class _FakeCapture implements ScreenCaptureGateway {
   Future<CapturedFrame> captureFrame() async {
     captureCalls++;
     return CapturedFrame(
-      bytes: Uint8List.fromList(const [1, 2, 3]),
+      bytes: frameBytes ?? Uint8List.fromList(const [1, 2, 3]),
       width: 100,
       height: 50,
       frameId: 1,
@@ -868,6 +1104,7 @@ class _ImmediateService extends ImageTranslationService {
 
   final ImageTranslationResult result;
   int translateCalls = 0;
+  Uint8List? lastImageBytes;
 
   @override
   Future<ImageTranslationResult> translate({
@@ -879,6 +1116,7 @@ class _ImmediateService extends ImageTranslationService {
     void Function(ImageTranslationProgress progress)? onProgress,
   }) async {
     translateCalls++;
+    lastImageBytes = imageBytes;
     return result;
   }
 }

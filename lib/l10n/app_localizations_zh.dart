@@ -96,6 +96,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get translationCapturing => '正在截取当前屏幕…';
 
   @override
+  String get translationModeFullScreen => '整屏翻译';
+
+  @override
+  String get translationModeRegion => '选区翻译';
+
+  @override
+  String get translationModeRegionSelected => '重新选区';
+
+  @override
+  String get translationSelectRegionHint => '在截图上拖动，框选需要翻译的区域。';
+
+  @override
+  String get translationSelectingRegion => '请框选需要翻译的区域…';
+
+  @override
+  String get translationConfirmRegion => '翻译';
+
+  @override
   String get translationResultReady => '翻译结果已显示在悬浮层中';
 
   @override
