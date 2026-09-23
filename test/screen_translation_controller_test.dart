@@ -657,6 +657,40 @@ void main() {
       controller.dispose();
     },
   );
+
+  test('geometry change during translation ignores the abort error', () async {
+    final capture = _FakeCapture();
+    final overlay = _FakeOverlay();
+    final service = _AbortOnTriggerService();
+    final controller = _controller(
+      await _configuredSettings(),
+      capture,
+      overlay,
+      serviceFactory: () => service,
+    );
+    await controller.start();
+    final translating = controller.translate();
+    await service.started.future;
+
+    capture.emitEvent(
+      const ScreenCaptureEvent(
+        state: ScreenCaptureSessionState.ready,
+        width: 50,
+        height: 100,
+        geometryVersion: 2,
+      ),
+    );
+    await translating;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.state, ScreenTranslationState.ready);
+    expect(controller.errorCode, isNull);
+    expect(
+      overlay.sent.where((message) => message['type'] == 'error'),
+      isEmpty,
+    );
+    controller.dispose();
+  });
 }
 
 ScreenTranslationController _controller(
@@ -846,6 +880,24 @@ class _ImmediateService extends ImageTranslationService {
   }) async {
     translateCalls++;
     return result;
+  }
+}
+
+class _AbortOnTriggerService extends ImageTranslationService {
+  final Completer<void> started = Completer<void>();
+
+  @override
+  Future<ImageTranslationResult> translate({
+    required Uint8List imageBytes,
+    required TranslationSettings settings,
+    required Locale? appLocale,
+    required Locale deviceLocale,
+    Future<void>? abortTrigger,
+    void Function(ImageTranslationProgress progress)? onProgress,
+  }) async {
+    if (!started.isCompleted) started.complete();
+    await abortTrigger;
+    throw StateError('The request was aborted.');
   }
 }
 

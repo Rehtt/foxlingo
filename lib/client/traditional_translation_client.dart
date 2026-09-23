@@ -183,14 +183,10 @@ class TraditionalTranslationClient {
     }
 
     return decoded.map((entry) {
-      if (entry is! List || entry.isEmpty) {
+      if (entry is! Map<String, dynamic>) {
         throw StateError('Unexpected translation entry format.');
       }
-      final first = entry.first;
-      if (first is! Map<String, dynamic>) {
-        throw StateError('Unexpected translation entry format.');
-      }
-      final translations = first['translations'];
+      final translations = entry['translations'];
       if (translations is! List || translations.isEmpty) {
         throw StateError('Translation entry did not include translations.');
       }

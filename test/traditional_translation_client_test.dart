@@ -88,20 +88,16 @@ void main() {
         expect(request.headers['Ocp-Apim-Subscription-Region'], 'eastasia');
 
         return _utf8Response([
-          [
-            {
-              'translations': [
-                {'text': '狼', 'to': 'zh-Hans'},
-              ],
-            },
-          ],
-          [
-            {
-              'translations': [
-                {'text': '奇幻', 'to': 'zh-Hans'},
-              ],
-            },
-          ],
+          {
+            'translations': [
+              {'text': '狼', 'to': 'zh-Hans'},
+            ],
+          },
+          {
+            'translations': [
+              {'text': '奇幻', 'to': 'zh-Hans'},
+            ],
+          },
         ]);
       }),
     );

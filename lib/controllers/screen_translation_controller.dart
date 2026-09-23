@@ -412,6 +412,7 @@ class ScreenTranslationController extends ChangeNotifier {
       return;
     }
     _invalidateRequest(request);
+    _activeRequest = null;
     if (_state == ScreenTranslationState.capturing) {
       await _screenCapture.cancelCapture().catchError((_) {});
     }
@@ -421,7 +422,6 @@ class ScreenTranslationController extends ChangeNotifier {
             _state != ScreenTranslationState.translating)) {
       return;
     }
-    _activeRequest = null;
     _clearCurrentTask();
     _setState(ScreenTranslationState.ready);
     await _sendSnapshot();
@@ -686,6 +686,7 @@ class ScreenTranslationController extends ChangeNotifier {
       return;
     }
     _invalidateRequest(request);
+    _activeRequest = null;
     await _screenCapture.cancelCapture().catchError((_) {});
     if (_sessionId != request.sessionId ||
         _currentTaskRequestId != request.requestId ||
@@ -693,7 +694,6 @@ class ScreenTranslationController extends ChangeNotifier {
             _state != ScreenTranslationState.translating)) {
       return;
     }
-    _activeRequest = null;
     _clearCurrentTask();
     _clearError();
     _setState(ScreenTranslationState.ready);
