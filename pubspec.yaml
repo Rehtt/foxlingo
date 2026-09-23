@@ -1,7 +1,7 @@
 name: foxlingo
 description: "FoxLingo Android screen translator with translated overlays."
 publish_to: 'none'
-version: 0.0.2+2
+version: 0.0.3+3
 
 environment:
   sdk: ^3.12.0
