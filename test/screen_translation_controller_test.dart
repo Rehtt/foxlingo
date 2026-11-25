@@ -25,8 +25,8 @@ void main() {
   test(
     'region mode waits for a selection, crops input and maps the result',
     () async {
-      final settings = await _configuredSettings();
-      await settings.setScreenTranslationMode(ScreenTranslationMode.region);
+      final settings = _DelayedModeSettings();
+      await _configuredSettings(settings);
       final capture = _FakeCapture()..frameBytes = await _makePng(100, 50);
       final overlay = _FakeOverlay();
       final service = _ImmediateService(
@@ -59,7 +59,13 @@ void main() {
       }
 
       controller.addListener(listenForSelection);
+      overlay.emit(_modeMessage(ScreenTranslationMode.region));
+      await settings.started.future;
       final translation = controller.translate();
+      final duplicate = controller.translate();
+      await Future<void>.delayed(Duration.zero);
+      expect(capture.captureCalls, 0);
+      settings.release.complete();
       await selecting.future.timeout(const Duration(seconds: 1));
       final request = overlay.sent.lastWhere(
         (message) => message['type'] == 'prepareCapture',
@@ -73,7 +79,8 @@ void main() {
           'rect': [0.25, 0.2, 0.75, 0.8],
         },
       });
-      await translation;
+      await Future.wait([translation, duplicate]);
+      expect(capture.captureCalls, 1);
       controller.removeListener(listenForSelection);
 
       expect(controller.state, ScreenTranslationState.result);
@@ -160,6 +167,60 @@ void main() {
       expect((readySnapshot['payload'] as Map)['hasSelectedRegion'], isFalse);
     },
   );
+
+  for (final restart in [false, true]) {
+    test(
+      restart
+          ? 'restart discards a translation waiting for a mode save'
+          : 'failed mode save discards waiting translation',
+      () async {
+        final settings = _DelayedModeSettings();
+        await _configuredSettings(settings);
+        final overlay = _FakeOverlay();
+        final capture = _FakeCapture();
+        final controller = _controller(settings, capture, overlay);
+        addTearDown(controller.dispose);
+        await controller.start();
+        overlay.emit(_modeMessage(ScreenTranslationMode.region));
+        await settings.started.future;
+        final translation = controller.translate();
+        if (restart) {
+          await controller.stop();
+          await controller.start();
+          settings.release.complete();
+        } else {
+          settings.release.completeError(StateError('mode save failed'));
+        }
+        await translation;
+        expect(capture.captureCalls, 0);
+        expect(
+          controller.state,
+          restart ? ScreenTranslationState.ready : ScreenTranslationState.error,
+        );
+      },
+    );
+  }
+
+  test('consecutive mode changes persist in arrival order', () async {
+    final settings = _DelayedModeSettings();
+    await _configuredSettings(settings);
+    final overlay = _FakeOverlay();
+    final controller = _controller(settings, _FakeCapture(), overlay);
+    addTearDown(controller.dispose);
+    await controller.start();
+    overlay.emit(_modeMessage(ScreenTranslationMode.region));
+    await settings.started.future;
+    overlay.emit(_modeMessage(ScreenTranslationMode.fullScreen));
+    await Future<void>.delayed(Duration.zero);
+    expect(settings.calls, [ScreenTranslationMode.region]);
+    settings.release.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(settings.calls, [
+      ScreenTranslationMode.region,
+      ScreenTranslationMode.fullScreen,
+    ]);
+    expect(settings.screenTranslationMode, ScreenTranslationMode.fullScreen);
+  });
 
   test(
     'overlay mode changes update and persist the controller setting',
@@ -929,8 +990,31 @@ ScreenTranslationController _controller(
   );
 }
 
-Future<TranslationSettings> _configuredSettings() async {
-  final settings = TranslationSettings();
+TranslationBridgeMessage _modeMessage(ScreenTranslationMode mode) => {
+  'version': 1,
+  'type': 'setTranslationMode',
+  'sessionId': 's1',
+  'payload': {'mode': mode.name},
+};
+
+class _DelayedModeSettings extends TranslationSettings {
+  final started = Completer<void>();
+  final release = Completer<void>();
+  final calls = <ScreenTranslationMode>[];
+
+  @override
+  Future<void> setScreenTranslationMode(ScreenTranslationMode mode) async {
+    calls.add(mode);
+    if (!started.isCompleted) started.complete();
+    await release.future;
+    await super.setScreenTranslationMode(mode);
+  }
+}
+
+Future<TranslationSettings> _configuredSettings([
+  TranslationSettings? existing,
+]) async {
+  final settings = existing ?? TranslationSettings();
   await settings.save(
     provider: TranslationProvider.llm,
     apiBaseUrl: TranslationSettings.defaultApiBaseUrl,

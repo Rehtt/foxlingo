@@ -423,21 +423,18 @@ class _TranslationOverlayAppState extends State<TranslationOverlayApp> {
   }
 
   Future<void> _onMenuAction(String type) async {
-    await _closeMenu();
-    switch (type) {
-      case 'modeFullScreen':
-        await _sendAction(
-          'setTranslationMode',
-          payload: const <String, dynamic>{'mode': 'fullScreen'},
-        );
-      case 'modeRegion':
-        await _sendAction(
-          'setTranslationMode',
-          payload: const <String, dynamic>{'mode': 'region'},
-        );
-      default:
-        await _sendAction(type);
+    if (type == 'modeFullScreen' || type == 'modeRegion') {
+      await _sendAction(
+        'setTranslationMode',
+        payload: <String, dynamic>{
+          'mode': type == 'modeRegion' ? 'region' : 'fullScreen',
+        },
+      );
+      await _closeMenu();
+      return;
     }
+    await _closeMenu();
+    await _sendAction(type);
   }
 
   Future<void> _setWindowMode(bool fullScreen, {bool force = false}) {
@@ -799,20 +796,22 @@ class _RegionSelectionSurfaceState extends State<_RegionSelectionSurface> {
                         top: 12,
                         left: 12,
                         right: 12,
-                        child: Center(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.68),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.68),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(
-                                l10n.translationSelectRegionHint,
-                                style: const TextStyle(color: Colors.white),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  l10n.translationSelectRegionHint,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                               ),
                             ),
                           ),
@@ -975,42 +974,44 @@ class _BubbleMenuSurface extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               color: Theme.of(context).colorScheme.surface,
               clipBehavior: Clip.antiAlias,
-              child: IntrinsicWidth(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _BubbleMenuItem(
-                      icon: Icons.fullscreen,
-                      label: l10n.translationModeFullScreen,
-                      selected: state.translationMode == 'fullScreen',
-                      onTap: () => unawaited(onAction('modeFullScreen')),
-                    ),
-                    _BubbleMenuItem(
-                      icon: Icons.crop_free,
-                      label: l10n.translationModeRegion,
-                      selected: state.translationMode == 'region',
-                      onTap: () => unawaited(onAction('modeRegion')),
-                    ),
-                    if (state.translationMode == 'region' &&
-                        state.hasSelectedRegion)
+              child: SingleChildScrollView(
+                child: IntrinsicWidth(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       _BubbleMenuItem(
-                        icon: Icons.crop,
-                        label: l10n.translationModeRegionSelected,
-                        onTap: () => unawaited(onAction('reselectRegion')),
+                        icon: Icons.fullscreen,
+                        label: l10n.translationModeFullScreen,
+                        selected: state.translationMode == 'fullScreen',
+                        onTap: () => unawaited(onAction('modeFullScreen')),
                       ),
-                    const Divider(height: 1),
-                    _BubbleMenuItem(
-                      icon: Icons.settings,
-                      label: l10n.settings,
-                      onTap: () => unawaited(onAction('openSettings')),
-                    ),
-                    const Divider(height: 1),
-                    _BubbleMenuItem(
-                      icon: Icons.close,
-                      label: l10n.closeResult,
-                      onTap: () => unawaited(onAction('stop')),
-                    ),
-                  ],
+                      _BubbleMenuItem(
+                        icon: Icons.crop_free,
+                        label: l10n.translationModeRegion,
+                        selected: state.translationMode == 'region',
+                        onTap: () => unawaited(onAction('modeRegion')),
+                      ),
+                      if (state.translationMode == 'region' &&
+                          state.hasSelectedRegion)
+                        _BubbleMenuItem(
+                          icon: Icons.crop,
+                          label: l10n.translationModeRegionSelected,
+                          onTap: () => unawaited(onAction('reselectRegion')),
+                        ),
+                      const Divider(height: 1),
+                      _BubbleMenuItem(
+                        icon: Icons.settings,
+                        label: l10n.settings,
+                        onTap: () => unawaited(onAction('openSettings')),
+                      ),
+                      const Divider(height: 1),
+                      _BubbleMenuItem(
+                        icon: Icons.close,
+                        label: l10n.closeResult,
+                        onTap: () => unawaited(onAction('stop')),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1045,7 +1046,7 @@ class _BubbleMenuItem extends StatelessWidget {
           children: [
             Icon(icon, size: 20),
             const SizedBox(width: 12),
-            Text(label),
+            Flexible(child: Text(label)),
             if (selected) ...[
               const SizedBox(width: 16),
               const Icon(Icons.check, size: 18),

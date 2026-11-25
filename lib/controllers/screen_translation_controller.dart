@@ -86,6 +86,7 @@ class ScreenTranslationController extends ChangeNotifier {
   _TranslationRequest? _activeRequest;
   Completer<void>? _overlayReady;
   Future<void>? _startOperation;
+  Future<bool>? _pendingModeChange;
   _StartAttempt? _startAttempt;
   bool _overlayShown = false;
   bool _captureSessionStarted = false;
@@ -276,6 +277,13 @@ class ScreenTranslationController extends ChangeNotifier {
     final sessionId = _sessionId;
     if (sessionId == null) {
       return;
+    }
+
+    while (_pendingModeChange != null) {
+      final saved = await _pendingModeChange!;
+      if (!saved || !_isReadySession(sessionId) || _activeRequest != null) {
+        return;
+      }
     }
 
     final request = _TranslationRequest(
@@ -791,28 +799,48 @@ class ScreenTranslationController extends ChangeNotifier {
   }
 
   Future<void> _setTranslationMode(ScreenTranslationMode mode) async {
-    if (_state != ScreenTranslationState.ready || _sessionId == null) {
+    final sessionId = _sessionId;
+    if (_state != ScreenTranslationState.ready || sessionId == null) {
       return;
     }
+    final previous = _pendingModeChange;
+    final change = _persistTranslationMode(mode, sessionId, previous);
+    _pendingModeChange = change;
+    try {
+      await change;
+    } finally {
+      if (identical(_pendingModeChange, change)) _pendingModeChange = null;
+    }
+  }
+
+  bool _isReadySession(String sessionId) =>
+      !_disposed &&
+      _sessionId == sessionId &&
+      _state == ScreenTranslationState.ready;
+
+  Future<bool> _persistTranslationMode(
+    ScreenTranslationMode mode,
+    String sessionId,
+    Future<bool>? previous,
+  ) async {
+    if (previous != null) await previous;
+    if (!_isReadySession(sessionId)) return false;
     try {
       await _settings.setScreenTranslationMode(mode);
     } on Object catch (error) {
+      if (!_isReadySession(sessionId)) return false;
       _setError(_controllerError(error));
+      await _sendSnapshot();
+      return false;
     }
-    await _sendSnapshot();
+    if (!_disposed && _state == ScreenTranslationState.ready) {
+      await _sendSnapshot();
+    }
+    return true;
   }
 
   Future<void> _reselectRegion() async {
-    if (_state != ScreenTranslationState.ready || _sessionId == null) {
-      return;
-    }
-    try {
-      await _settings.setScreenTranslationMode(ScreenTranslationMode.region);
-    } on Object catch (error) {
-      _setError(_controllerError(error));
-      await _sendSnapshot();
-      return;
-    }
+    unawaited(_setTranslationMode(ScreenTranslationMode.region));
     await translate(forceRegionSelection: true);
   }
 

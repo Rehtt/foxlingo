@@ -407,6 +407,37 @@ void main() {
     },
   );
 
+  testWidgets('landscape menu scrolls to Close with large text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(720, 320);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final bridge = _TestBridge();
+    _stubOverlayWindow(tester, windowCalls: []);
+    await _pumpReadyBubble(tester, bridge);
+    bridge.emit(const {
+      'version': 1,
+      'type': 'state',
+      'sessionId': 's1',
+      'payload': {
+        'state': 'ready',
+        'translationMode': 'region',
+        'hasSelectedRegion': true,
+      },
+    });
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byIcon(Icons.translate));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Close'));
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(bridge.sent.last['type'], 'stop');
+    await bridge.close();
+  });
+
   testWidgets('area selection sends normalized bounds for the captured frame', (
     tester,
   ) async {
@@ -425,18 +456,16 @@ void main() {
         'locale': 'en',
         'translationMode': 'region',
         'hasSelectedRegion': false,
-        'frameWidth': 100,
-        'frameHeight': 50,
+        'frameWidth': 800,
+        'frameHeight': 536,
       },
     });
     await tester.pump();
 
     final translateButton = find.widgetWithText(TextButton, 'Translate');
     expect(tester.widget<TextButton>(translateButton).onPressed, isNull);
-    final canvas = tester.getRect(
-      find.byKey(const ValueKey('region-selection-canvas')),
-    );
-    await tester.dragFrom(canvas.center, const Offset(120, 80));
+    final hint = find.text('Drag on the screenshot to select an area.');
+    await tester.dragFrom(tester.getCenter(hint), const Offset(120, 80));
     await tester.pump();
     expect(tester.widget<TextButton>(translateButton).onPressed, isNotNull);
     await tester.tap(translateButton);
